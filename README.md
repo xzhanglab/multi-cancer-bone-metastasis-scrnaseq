@@ -11,7 +11,8 @@ Liu, F., Ding, Y., Xu, Z., Hao, X., Pan, T., Miles, G., Wu, Y.-H., Liu, J., Bado
 </span>
 
 <span style="font-size: 12px;">
-All intermediate data produced by running this code, as described below, are [**archived on Zenodo**](https://zenodo.org/uploads/14270977).  
+All intermediate data produced by running this code, as described below, are available for download <a href="https://zenodo.org/uploads/14270977"><b>on Zenodo</b></a>.
+
 </span>
 
 ### <span style="font-size: 14px;">Overview</span>
