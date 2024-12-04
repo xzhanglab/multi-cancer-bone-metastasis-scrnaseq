@@ -15,7 +15,7 @@ These instructions will guide you through the following:
 
 ---
 
-## Code Explanation and Related Figures
+## Code and Related Figures
 
 | **File Name**                                    | **Description**                                                                 | **Related Figure**             |
 |--------------------------------------------------|---------------------------------------------------------------------------------|--------------------------------|
@@ -41,7 +41,7 @@ These instructions will guide you through the following:
 
 ---
 
-## Data file (from Zenodo) explanation 
+## Data file (from Zenodo) 
 
 | Directory/File                      | Description                                                                 |
 |-------------------------------------|-----------------------------------------------------------------------------|
