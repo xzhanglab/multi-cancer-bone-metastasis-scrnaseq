@@ -25,6 +25,7 @@ These instructions will guide you through the following:
 2. Integrating datasets, applying batch correction, and reproducing analysis from the manuscript.  
 <br>
 3. Reproducing the results from analyzing integrated bulk/microarray datasets.  
+<br>
 </span>
 
 <br>
