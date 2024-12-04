@@ -41,7 +41,25 @@ These instructions will guide you through the following:
 
 ---
 
-## Prepared by
-Fengshuo Liu
+## Data file (from Zenodo) explanation 
 
+| Directory/File                      | Description                                                                 |
+|-------------------------------------|-----------------------------------------------------------------------------|
+| Bulk_Microarray_Data(published)     | Published bulk RNA-seq or microarray data; and integrated data             |
+| cell_count_from_IF_staining         | Cell count from IF staining for OC, Treg, and Tex cells                    |
+| dynamo                              | Scanpy objects for major cell types, and loom files (integrated or subset by archetypes) |
+| integrated_Seurat_objects           | Integrated, batch-corrected, annotated Seurat and Scanpy objects, subset by major metadata |
+| scPred_data                         | Data of prediction probabilities and training dataset quality              |
+| DESeq2_obj_archetype_comparsion     | DESeq2 objects used for comparing the major dominant cell type across archetypes (for GSVA analysis) |
+| cellchat                            | CellChat objects and derived data for integrated plot                      |
+| infercnv_data_for_analysis          | Data used for infercnv analysis, contains epithelium and reference stromal cells |
+| msigdb_v2023.2.Hs_GMTs              | Pathway data from MsigDB, used for GSEA and GSVA analysis                  |
+| scPred_training_data_processed      | Training dataset used for SVM-based cell type annotation                   |
+| Supplimentary Tables                | Supplementary information and data                                         |
+| cellranger_per_sample_outs          | CellRanger output                                                          |
+| infercsv_outs                       | Infercnv analysis output                                                   |
+| per_sample_seurat_objects           | Seurat object for each patient                                             |
+
+---
+## Prepared by Fengshuo Liu
 ---
