@@ -1,0 +1,180 @@
+---
+title: "01_integration_Seurat.v4.39_samples"
+output: html_document
+date: "2024-12-03"
+---
+
+
+```{r}
+library(Seurat)
+library(scCustomize)
+```
+
+
+```{r, read in the individual Seurat dfects}
+#readin data
+# Get the full paths of the .rds files
+file_paths <- list.files(path = "./data/individual_seurat_dfs/", pattern = "\\.rds$", full.names = TRUE)
+
+# Sort file paths if necessary (if they are not already in the desired order)
+file_paths <- sort(file_paths)
+
+# Read each file and assign it to a variable in the global environment
+for (i in seq_along(file_paths)) {
+  # Create a variable name based on the index
+  var_name <- paste0("df", i)
+  
+  # Read the .rds file and assign it to a variable in the global environment
+  assign(var_name, readRDS(file_paths[i]))
+}
+```
+
+#Batch correction: canonical correlation analysis (RPCA) + mutual nearest neighbors (MNN) using Seurat v3
+
+```{r}
+# Get all the dfects in the global environment
+all_dfects <- ls(.GlobalEnv)
+
+# Filter those that match the pattern "df" followed by a number
+df_dfects <- all_dfects[grepl("^df[0-9]+$", all_dfects)]
+
+# Generate the list of data frames using mget
+ob.list <- mget(df_dfects, envir = .GlobalEnv)
+
+
+
+df.anchors <- FindIntegrationAnchors(dfect.list = ob.list, 
+                                     anchor.features = 2000,
+                                     reduction = "rpca",
+                                     dims = 1:30)
+
+df <- IntegrateData(anchorset = df.anchors, 
+                    dims = 1:30,
+                    preserve.order = T)
+
+
+DefaultAssay(df) <- "integrated"
+
+
+df <- ScaleData(df, 
+                do.center = T,
+                do.scale = F)
+
+df <- RunPCA(df, 
+             npcs = 30,
+             ndims.print = 1:5, 
+             nfeatures.print = 5)
+
+
+
+
+
+df  <- FindClusters(df , 
+                    algorithm = 1,
+                    random.seed = 100,
+                    resolution = c(0.2,
+                                   0.4,
+                                   0.6,
+                                   0.8,
+                                   1.0,
+                                   1.2,
+                                   1.4,
+                                   1.6,
+                                   1.8,
+                                   2.0,
+                                   3.0,
+                                   4.0,
+                                   5.0), 
+                    verbose = FALSE)
+
+
+
+df <- RunUMAP(df, 
+              dims = 1:30, 
+              reduction = "pca", 
+              n.neighbors = 50, 
+              min.dist = 0.5, 
+              spread = 1,
+              metric = "euclidean", 
+              seed.use = 1,
+              dim.embed = 2
+              )   
+
+
+DimPlot_scCustom(seurat_dfect=df, 
+                      reduction = "umap", 
+                      group.by = c("integrated_snn_res.5"),
+                      #ncol = 1,
+                      label = T,
+                      label.size = 4,
+                      pt.size = 0.1
+                      )
+
+
+DefaultAssay(df) <- "RNA"
+saveRDS(df, './data/integrated/34.integrated.rds')
+```
+
+
+```{r, cell type annotation after prediction and cross-validation}
+#annotation with major celltype with counts
+df@active.ident <- factor(df$rpca_clusters)
+
+celltype_C=data.frame(ClusterID=0:108,
+                       celltype_C=0:108) 
+
+celltype_C[celltype_C$ClusterID %in% c(10,19,75,76,60,97,30,24,79,42,44,20,85,11,99),2]='CD14hi Mono'  
+celltype_C[celltype_C$ClusterID %in% c(34),2]='CD16hi Mono' 
+celltype_C[celltype_C$ClusterID %in% c(37,101,51,67,36),2]='Mφ'
+celltype_C[celltype_C$ClusterID %in% c(96,21),2]='cDC'  
+celltype_C[celltype_C$ClusterID %in% c(94,45),2]='pDC'  
+celltype_C[celltype_C$ClusterID %in% c(90),2]='OC'
+celltype_C[celltype_C$ClusterID %in% c(87,56),2]='plasma'
+celltype_C[celltype_C$ClusterID %in% c(17,57),2]='immature B'
+celltype_C[celltype_C$ClusterID %in% c(0),2]='naive B'  
+celltype_C[celltype_C$ClusterID %in% c(12,80,84),2]='memory B' 
+celltype_C[celltype_C$ClusterID %in% c(74,93),2]='CLP'
+celltype_C[celltype_C$ClusterID %in% c(46,89,62),2]='CMP'  
+celltype_C[celltype_C$ClusterID %in% c(73,32,91,102,106,71),2]='HPSC'  
+celltype_C[celltype_C$ClusterID %in% c(50,35,33,53,78,88,108,38,61,55,103,92,82,69),2]='Epithelium'
+celltype_C[celltype_C$ClusterID %in% c(59,100),2]='CAR'
+celltype_C[celltype_C$ClusterID %in% c(52),2]='OB'
+celltype_C[celltype_C$ClusterID %in% c(72),2]='Fibroblast'  
+celltype_C[celltype_C$ClusterID %in% c(70,82,91,102),2]='Erythroid' 
+celltype_C[celltype_C$ClusterID %in% c(98,40),2]='Pericyte'
+celltype_C[celltype_C$ClusterID %in% c(65),2]='Endothelium'  
+celltype_C[celltype_C$ClusterID %in% c(4),2]='CD16hi NK'  
+celltype_C[celltype_C$ClusterID %in% c(15,18,22,26,7,83,9),2]='naive CD4 T'  
+celltype_C[celltype_C$ClusterID %in% c(14,27,3,31,8),2]='memory/helper CD4 T'  
+celltype_C[celltype_C$ClusterID %in% c(1,13,2,23,25,28,5,58,6,64,95),2]='exhausting CD8 T'  
+celltype_C[celltype_C$ClusterID %in% c(16,39,49),2]='CD8 Teff'  
+celltype_C[celltype_C$ClusterID %in% c(48),2]='CD56hi NK'  
+celltype_C[celltype_C$ClusterID %in% c(29,66,86),2]='CD4 Treg'  
+celltype_C[celltype_C$ClusterID %in% c(47),2]='CD8 Tex'  
+celltype_C[celltype_C$ClusterID %in% c(43),2]='Treg committed naive CD4 T'  
+celltype_C[celltype_C$ClusterID %in% c(41,43,68),2]='memory CD8 T'  
+celltype_C[celltype_C$ClusterID %in% c(54),2]='CD16int CD56int NK' 
+celltype_C[celltype_C$ClusterID %in% c(63),2]='naive CD8 T'  
+ 
+
+
+head(celltype_C)
+celltype_C
+table(celltype_C$celltype_C)
+df@meta.data$celltype_C = "NA"
+for(i in 1:nrow(celltype_C)){
+  df@meta.data[which(df@meta.data$rpca_clusters == celltype_C$ClusterID[i]),'celltype_C'] <- celltype_C$celltype_C[i]}
+table(df@meta.data$celltype_C)
+
+saveRDS(df, './data/integrated/47.integrated.rds')
+```
+
+```{r, convert to .h5ad file format for analysis in Scanpy and Dynamo}
+library(sceasy)
+library(reticulate)
+DefaultAssay(df) <- "RNA"
+DefaultAssay(df) <- "RNA"
+df[["RNA"]] <- as(df[["RNA"]], "Assay")
+sceasy::convertFormat(df, from = "seurat", to = "anndata", outFile = './data/integrated/39.integrated.h5ad')
+```
+

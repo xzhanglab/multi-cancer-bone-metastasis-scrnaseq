@@ -1,0 +1,134 @@
+---
+title: "Massague_dataset"
+output: html_document
+date: "2024-09-16"
+---
+
+```{r}
+# Load necessary libraries
+library(GSVA)
+library(GSEABase)
+library(pheatmap)
+```
+
+```{r}
+# Load necessary libraries
+library(GSVA)
+library(GSEABase)
+library(pheatmap)
+
+# Assuming 'expression_matrix' is your expression data matrix with genes as rows and samples as columns
+# Assuming 'marker' is your data frame with cell type markers
+# Assuming 'allmets.ann.cal' is your sample annotation data frame with Met.Site
+load("./data/Bulk_Microarray_Data(published)/PMID-19573813.RData")
+marker <- readRDS("./data/Bulk_Microarray_Data(published)/cell_type_markers_from_scRNA_data_for_estimation.rds")
+expression_matrix <- allmets.clps
+# Prepare gene names and keep top 10 genes for each cell type
+rownames(expression_matrix) <- toupper(rownames(expression_matrix))
+
+# Split the marker data into cell types and only keep the top 10 genes per cell type
+cell_type_markers <- split(marker$gene, marker$cluster)
+cell_type_markers <- lapply(cell_type_markers, function(genes) {
+  toupper(genes[1:min(10, length(genes))])  # Keep top 10 genes
+})
+
+# Run ssGSEA to calculate enrichment scores using all cell types
+ssgsea_scores_all <- gsva(expression_matrix, cell_type_markers, method='ssgsea', ssgsea.norm=TRUE)
+
+# Filter out unwanted cell types after calculating ssGSEA scores
+cell_types_to_keep <- c("pro Mono", "CD14hi Mono", "CD16hi Mono", "OC", "Mφ")#, "CD4 Treg", "CD8 Tex")
+rownames(ssgsea_scores_all) <- trimws(rownames(ssgsea_scores_all))
+cell_types_to_keep <- trimws(cell_types_to_keep)
+ssgsea_scores_filtered <- ssgsea_scores_all[cell_types_to_keep, , drop=FALSE]
+
+# Reorder the samples based on 'Met.Site' column in 'allmets.ann.cal'
+common_samples <- intersect(colnames(ssgsea_scores_filtered), rownames(allmets.ann.cal))
+allmets.ann.cal <- allmets.ann.cal[common_samples, ]
+ssgsea_scores_filtered <- ssgsea_scores_filtered[, common_samples]
+
+# Scale the data after filtering
+ssgsea_scores_scaled <- t(scale(t(ssgsea_scores_filtered)))
+
+# Generate heatmap
+# Adjust the scale range to -1.5 to 1.5
+breaks <- seq(-1.5, 1.5, length.out = 100)
+
+# Create annotations for the samples (Met.Site)
+sample_annotations <- data.frame(Met.Site = allmets.ann.cal$Met.Site)
+rownames(sample_annotations) <- rownames(allmets.ann.cal)
+
+# Generate the heatmap with annotations
+pheatmap(ssgsea_scores_scaled,
+         breaks = breaks,
+         clustering_distance_rows = 'correlation',
+         clustering_distance_cols = 'correlation',
+         clustering_method = 'complete',
+         show_colnames = TRUE,
+         show_rownames = TRUE,
+         cluster_rows = FALSE,
+         cluster_cols = TRUE,
+         fontsize_row = 10,
+         fontsize_col = 10,
+         annotation_col = sample_annotations)
+
+```
+```{r}
+# Load necessary libraries
+library(GSVA)
+library(GSEABase)
+library(pheatmap)
+
+# Assuming 'expression_matrix' is your expression data matrix with genes as rows and samples as columns
+# Assuming 'marker' is your data frame with cell type markers
+# Assuming 'allmets.ann.cal' is your sample annotation data frame with Met.Site
+
+# Prepare gene names and keep top 10 genes for each cell type
+rownames(expression_matrix) <- toupper(rownames(expression_matrix))
+
+# Split the marker data into cell types and only keep the top 10 genes per cell type
+cell_type_markers <- split(marker$gene, marker$cluster)
+cell_type_markers <- lapply(cell_type_markers, function(genes) {
+  toupper(genes[1:min(10, length(genes))])  # Keep top 10 genes
+})
+
+# Run ssGSEA to calculate enrichment scores using all cell types
+ssgsea_scores_all <- gsva(expression_matrix, cell_type_markers, method='ssgsea', ssgsea.norm=TRUE)
+
+# Filter out unwanted cell types after calculating ssGSEA scores
+cell_types_to_keep <- c("pro Mono", "CD14hi Mono", "CD16hi Mono", "OC", "Mφ")#, "CD4 Treg", "CD8 Tex")
+rownames(ssgsea_scores_all) <- trimws(rownames(ssgsea_scores_all))
+cell_types_to_keep <- trimws(cell_types_to_keep)
+ssgsea_scores_filtered <- ssgsea_scores_all[cell_types_to_keep, , drop=FALSE]
+
+# Filter samples where Met.Site is "Bone"
+bone_samples <- rownames(allmets.ann.cal)[allmets.ann.cal$Met.Site == "Bone"]
+common_samples <- intersect(bone_samples, colnames(ssgsea_scores_filtered))
+ssgsea_scores_filtered <- ssgsea_scores_filtered[, common_samples]
+
+# Re-do scaling for the filtered data
+ssgsea_scores_scaled <- t(scale(t(ssgsea_scores_filtered)))
+
+# Generate heatmap
+# Adjust the scale range to -1.5 to 1.5
+breaks <- seq(-2, 2, length.out = 100)
+
+# Create annotations for the samples (Met.Site)
+sample_annotations <- data.frame(Met.Site = allmets.ann.cal[common_samples, "Met.Site"])
+rownames(sample_annotations) <- common_samples
+
+# Generate the heatmap with annotations
+pheatmap(ssgsea_scores_scaled,
+         breaks = breaks,
+         clustering_distance_rows = 'correlation',
+         clustering_distance_cols = 'correlation',
+         clustering_method = 'complete',
+         show_colnames = TRUE,
+         show_rownames = TRUE,
+         cluster_rows = FALSE,
+         cluster_cols = TRUE,
+         fontsize_row = 10,
+         fontsize_col = 10,
+         annotation_col = sample_annotations)
+
+```
+

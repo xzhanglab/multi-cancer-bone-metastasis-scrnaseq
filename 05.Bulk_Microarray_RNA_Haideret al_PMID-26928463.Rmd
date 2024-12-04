@@ -1,0 +1,94 @@
+---
+title: "GSE77930_prostate"
+output: html_document
+date: "2024-09-17"
+---
+
+
+```{r}
+# Load necessary libraries
+library(GSVA)
+library(GSEABase)
+library(pheatmap)
+rm(list=ls())
+```
+
+
+```{r}
+library(GSVA)
+library(GSEABase)
+library(pheatmap)
+library(RColorBrewer)
+library(viridis)
+
+# Load data
+load("/Volumes/Fengshuo_14T/Lab/Yunfeng/cancer_comparsions/Zenodo/data/Bulk_Microarray_Data(published)/PMID-26667932.RData")
+marker <- readRDS("~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Human_Bone_Mets_Comparsion_scRNA/Additional human metastasis datasets/data/markers_from_scRNA.rds")
+
+# Assuming 'gse74685.clps' is your expression data matrix with genes as rows and samples as columns
+expression_matrix <- gse74685.clps
+
+# Prepare gene names
+rownames(expression_matrix) <- toupper(rownames(expression_matrix))
+
+# Split the marker data into cell types and only keep the top 10 genes per cell type
+cell_type_markers <- split(marker$gene, marker$cluster)
+cell_type_markers <- lapply(cell_type_markers, function(genes) {
+  toupper(genes[1:min(10, length(genes))])  # Keep top 10 genes
+})
+
+# Run ssGSEA to calculate enrichment scores using all cell types (no filtering)
+ssgsea_scores_all <- gsva(expression_matrix, cell_type_markers, method='ssgsea', ssgsea.norm=TRUE)
+
+# Reorder the samples based on new sample annotation 'gse74685.ann'
+common_samples <- intersect(colnames(ssgsea_scores_all), rownames(gse74685.ann))
+gse74685.ann <- gse74685.ann[common_samples, ]
+ssgsea_scores_all <- ssgsea_scores_all[, common_samples]
+
+# Scale the data
+ssgsea_scores_scaled <- t(scale(t(ssgsea_scores_all)))
+
+# Generate heatmap
+# Adjust the scale range to -1.5 to 1.5
+breaks <- seq(-1.5, 1.5, length.out = 100)
+
+# Create annotations for the samples (Met.Site and other annotations)
+gse74685.ann$Site <- factor(gse74685.ann$Site)  # Ensure 'Site' is a factor
+sample_annotations <- data.frame(Met.Site = gse74685.ann$Site)
+rownames(sample_annotations) <- rownames(gse74685.ann)
+
+# Generate color palette for Met.Site based on the number of unique values
+unique_met_sites <- unique(gse74685.ann$Site)
+num_met_sites <- length(unique_met_sites)
+
+# Generate more colors if needed based on unique Met.Site values
+met_site_colors <- if (num_met_sites > 10) {
+  colorRampPalette(brewer.pal(9, "Paired"))(num_met_sites)  # Generate more colors if needed
+} else {
+  brewer.pal(10, "Paired")
+}
+
+# Assign colors for each unique Met.Site and make sure levels match
+names(met_site_colors) <- levels(gse74685.ann$Site)
+
+# Specify color palettes for annotations
+annotation_colors <- list(
+  Met.Site = met_site_colors  # Custom palette for Met.Site
+)
+
+# Generate the heatmap with annotations and custom color palettes
+pheatmap(ssgsea_scores_scaled,
+         breaks = breaks,
+         clustering_distance_rows = 'correlation',
+         clustering_distance_cols = 'correlation',
+         clustering_method = 'complete',
+         show_colnames = TRUE,
+         show_rownames = TRUE,
+         cluster_rows = T,
+         cluster_cols = TRUE,
+         fontsize_row = 10,
+         fontsize_col = 10,
+         annotation_col = sample_annotations,
+         annotation_colors = annotation_colors)
+
+```

@@ -1,0 +1,247 @@
+---
+title: "CellChat_comparsion"
+output: html_document
+date: "2023-10-11"
+---
+
+```{r, setup packages}
+rm(list = ls())
+# CellChat demonstration web page: github：https://github.com/sqjin/CellChat
+# CellChat database web: http://www.cellchat.org/
+# remotes::install_github("sqjin/CellChat")
+library(CellChat)
+library(patchwork)
+library(Seurat)
+library(SeuratData)
+library(dplyr)
+library(data.table)
+library(magrittr)
+library(ggplot2)
+library(dplyr)
+library(plyr)
+library(data.table)
+library(magrittr)
+library(clusterProfiler)
+library(Matrix)
+library(fossil) 
+library(liger)
+library(ggrepel)
+library(scCustomize)
+library(ComplexHeatmap)
+library(grDevices)
+options(stringsAsFactors = FALSE)
+# CellChat requires 2 set of input data: 1). scRNA seq expression matrix (e.g. normalized data from Seurat, expression matrix is stored in: seur
+```
+
+##Load CellChat object of each dataset
+```{r}
+cellchat.exp <- readRDS("./data/phenotype/celltype_C/TregTex.cellchat.rds")
+cellchat.exp <- updateCellChat(cellchat.exp)
+
+cellchat.ctrl <- readRDS("./data/phenotype/celltype_C/MφOC.cellchat.rds")
+cellchat.ctrl <- updateCellChat(cellchat.ctrl)
+```
+##Lift up CellChat object and merge together
+```{r}
+# Define the cell labels to lift up
+group.new = levels(cellchat.exp@idents)
+cellchat.ctrl <- liftCellChat(cellchat.ctrl, group.new)
+#> The CellChat object will be lifted up using the cell labels FIB-A, FIB-B, FIB-P, DC, Pericyte, MYL, Immune, ENDO, Muscle, MELA, Basal-P, Basal, Spinious
+#> Update slots object@net, object@netP, object@idents in a single dataset...
+object.list <- list(MφOC = cellchat.ctrl, TregTex = cellchat.exp)
+cellchat <- mergeCellChat(object.list, add.names = names(object.list), cell.prefix = TRUE)
+#> Warning in mergeCellChat(object.list, add.names = names(object.list),
+#> cell.prefix = TRUE): Prefix cell names!
+#> The cell barcodes in merged 'meta' is  rep1_AAACCTGCACCAACCG rep1_AAACGGGAGCCGATTT rep1_AAACGGGAGTATCGAA rep1_AAACGGGCATCTCCCA rep1_AAAGATGCACTTGGAT rep1_AAAGATGCAGTTCATG
+#> Warning in mergeCellChat(object.list, add.names = names(object.list), cell.prefix = TRUE): The cell barcodes in merged 'meta' is different from those in the used data matrix.
+#>               We now simply assign the colnames in the data matrix to the rownames of merged 'mata'!
+#> Merge the following slots: 'data.signaling','images','net', 'netP','meta', 'idents', 'var.features' , 'DB', and 'LR'.
+saveRDS(cellchat, './data/phenotype/celltype_C/TregTex_vs_MφOC.cellchat.rds')
+```
+##
+```{r}
+gg1 <- compareInteractions(cellchat, show.legend = F, group = c(1,2))
+gg2 <- compareInteractions(cellchat, show.legend = F, group = c(1,2), measure = "weight")
+gg1 + gg2
+
+
+par(mfrow = c(1,2), xpd=TRUE)
+netVisual_diffInteraction(cellchat, weight.scale = T)
+netVisual_diffInteraction(cellchat, weight.scale = T, measure = "weight")
+
+
+cairo_pdf(file = './outs/celltype/TregTex_vs_MφOC_cir.pdf', width = 8, height = 8, pointsize = 12)
+netVisual_diffInteraction(cellchat, weight.scale = T, measure = "weight")
+dev.off()
+```
+
+```{r}
+gg1 <- netVisual_heatmap(cellchat)
+#> Do heatmap based on a merged object
+gg2 <- netVisual_heatmap(cellchat, measure = "weight")
+#> Do heatmap based on a merged object
+gg1 + gg2
+
+cairo_pdf(file = './outs/celltype_E_all/TregTex_vs_MφOC_heat.pdf', width = 12, height = 8, pointsize = 12)
+netVisual_heatmap(cellchat, measure = "weight", cluster.rows = T, cluster.cols = T)
+dev.off()
+```
+
+```{r}
+num.link <- sapply(object.list, function(x) {rowSums(x@net$count) + colSums(x@net$count)-diag(x@net$count)})
+weight.MinMax <- c(min(num.link), max(num.link)) # control the dot size in the different datasets
+gg <- list()
+for (i in 1:length(object.list)) {
+  gg[[i]] <- netAnalysis_signalingRole_scatter(object.list[[i]], title = names(object.list)[i], weight.MinMax = weight.MinMax,font.size = 6#,x.lim = c(0, 40), y.lim = c(0, 40)
+                                               )
+}
+#> Signaling role analysis on the aggregated cell-cell communication network from all signaling pathways
+#> Signaling role analysis on the aggregated cell-cell communication network from all signaling pathways
+cairo_pdf(file = './outs/celltype_C/TregTex_vs_MφOC_ins_outs.pdf', width = 10, height = 4, pointsize = 6)
+patchwork::wrap_plots(plots = gg)
+dev.off()
+```
+
+
+```{r}
+cairo_pdf(file = './outs/celltype_C/TregTex_vs_MφOC_conserved_specific.pdf', width = 4, height = 12, pointsize = 10)
+rankNet(cellchat, mode = "comparison", stacked = T,measure = c("weight", "count"),
+        #sources.use = c(17,20), targets.use = c(8,9,10,11),
+        do.stat = TRUE)
+dev.off()
+```
+#Part III: Identify the upgulated and down-regulated signaling ligand-receptor pairs
+```{r}
+levels(cellchat@idents[[1]])
+
+# [1] "BMEC"                "CD14+ Mo"            "CD16+ Mo"            "CD4 naive T"         "CD4 Tfh"             "CD4 Tmem"            "CD4 Treg"            "CD8 naive T"        
+# [9] "CD8 Teff"            "CD8 Tex"             "CD8 Treg"            "CD8 Ttrans"          "cDC1"                "cDC2"                "Cycling progenitors" "epithelium"         
+#[17] "Fibroblast"          "immature B"          "memory B"            "MSC"                 "Mφ"                  "naive B"             "NK"                  "OC"                 
+#[25] "OLC"                 "pDC"                 "Pericyte"            "plasma"              "pre/pro B"           "promyelocyte"        "T cycling"      
+
+p1 <- netVisual_bubble(cellchat, sources.use = c(21,4), targets.use = c(1),  comparison = c(1, 2), angle.x = 45, thresh = 0.001,min.quantile = 0.5)
+p2 <- netVisual_bubble(cellchat, sources.use = 10, targets.use = c(21,24),  comparison = c(1, 2), angle.x = 45, thresh = 0.001,min.quantile = 0.5)
+p3 <- netVisual_bubble(cellchat, sources.use = 27, targets.use = c(7,24,21,9,10,11,21,24),  comparison = c(1, 2), angle.x = 45, thresh = 0.001,min.quantile = 0.5)
+p4 <- netVisual_bubble(cellchat, sources.use = 20, targets.use = c(7,24,21,9,10,11,21,24),  comparison = c(1, 2), angle.x = 45, thresh = 0.001,min.quantile = 0.5)
+p5 <- netVisual_bubble(cellchat, sources.use = 11, targets.use = c(7,24,21,9,10,11,21,24),  comparison = c(1, 2), angle.x = 45, thresh = 0.001,min.quantile = 0.5)
+p6 <- netVisual_bubble(cellchat, sources.use = 7, targets.use = c(7,24,21,9,10,11,21,24),  comparison = c(1, 2), angle.x = 45, thresh = 0.001,min.quantile = 0.5)
+p7 <- netVisual_bubble(cellchat, sources.use = 21, targets.use = c(7,24,21,9,10,11,21,24),  comparison = c(1, 2), angle.x = 45, thresh = 0.001,min.quantile = 0.5)
+p8 <- netVisual_bubble(cellchat, sources.use = 24, targets.use = c(7,24,21,9,10,11,21,24),  comparison = c(1, 2), angle.x = 45, thresh = 0.001,min.quantile = 0.5)
+
+p1
+
+cairo_pdf(file = './outs/celltype_E_all/TregTex_vs_MφOC_Treg-Tex->TregTex.pdf', width = 32, height = 24, pointsize = 10)
+(p1 + p2 + p3 + p4 + p5 + p6 + p7 + p8) + 
+  plot_layout(ncol =8)  # specify 4 columns to arrange all plots in one row
+dev.off()
+
+#> Comparing communications on a merged object
+```
+
+
+```{r}
+
+gg1 <- netVisual_bubble(cellchat, sources.use = 29, targets.use = c(1:33),  comparison = c(1, 2), max.dataset = 2, title.name = "Higher signaling levels in Treg/Tex", angle.x = 45, remove.isolate = T)
+#> Comparing communications on a merged object
+gg2 <- netVisual_bubble(cellchat, sources.use = 29, targets.use = c(1:33),  comparison = c(1, 2), max.dataset = 1, title.name = "Higher signaling levels in Mφ/OC", angle.x = 45, remove.isolate = T)
+#> Comparing communications on a merged object
+cairo_pdf(file = './outs/celltype_C/TregTex_vs_MφOC_OC->all_in_de.pdf', width = 24, height = 12, pointsize = 10)
+gg1 + gg2
+dev.off()
+
+```
+
+```{r}
+pathways.show <- c("WNT") 
+par(mfrow = c(1,2), xpd=TRUE)
+ht <- list()
+for (i in 1:length(object.list)) {
+  ht[[i]] <- netVisual_heatmap(object.list[[i]], signaling = pathways.show, color.heatmap = "Reds",title.name = paste(pathways.show, "signaling ",names(object.list)[i]))
+}
+#> Do heatmap based on a single object 
+#> 
+#> Do heatmap based on a single object
+#cairo_pdf(file = './outs/celltype_E_all/CXCL.pdf', width = 24, height = 12, pointsize = 10)
+ComplexHeatmap::draw(ht[[1]] + ht[[2]], ht_gap = unit(0.5, "cm"))
+#dev.off()
+```
+
+```{r}
+library(ComplexHeatmap)
+library(CellChat)
+
+# Assuming CellChatDB$interaction is your dataset
+unique_pathways <- unique(CellChatDB$interaction$pathway_name)
+
+# Setting up the plot parameters
+par(mfrow = c(1, 2), xpd = TRUE)
+
+# Directory to save the PDF files
+output_dir <- './outs/celltype_E_all/per_pathway/'
+
+# Ensure the directory exists
+if (!dir.exists(output_dir)) {
+  dir.create(output_dir, recursive = TRUE)
+}
+
+# Loop through each unique pathway
+for (pathway in unique_pathways) {
+  tryCatch({
+    ht <- list()
+
+    for (i in 1:length(object.list)) {
+      ht[[i]] <- netVisual_heatmap(object.list[[i]], signaling = pathway, color.heatmap = "Reds", title.name = paste(pathway, "signaling", names(object.list)[i]))
+    }
+
+    # Save the plot as a PDF file
+    pdf_file <- paste0(output_dir, pathway, '.pdf')
+    cairo_pdf(file = pdf_file, width = 12, height = 6, pointsize = 10)
+    ComplexHeatmap::draw(ht[[1]] + ht[[2]], ht_gap = unit(0.5, "cm"))
+    dev.off()
+  }, error = function(e) {
+    cat("Error in plotting pathway:", pathway, "\n", e$message, "\nSkipping...\n")
+  })
+}
+
+
+```
+
+```{r}
+# Circle plot
+pathways.show <- c("CSF") 
+weight.max <- getMaxWeight(object.list, slot.name = c("netP"), attribute = pathways.show) # control the edge weights across different datasets
+par(mfrow = c(1,2), xpd=TRUE)
+for (i in 1:length(object.list)) {
+  netVisual_aggregate(object.list[[i]], signaling = pathways.show, layout = "circle", edge.weight.max = weight.max[1], edge.width.max = 10, signaling.name = paste(pathways.show, names(object.list)[i]))
+}
+```
+
+```{r}
+cellchat@meta$datasets = factor(cellchat@meta$datasets, levels = c("MφOC", "TregTex")) # set factor level
+plotGeneExpression(cellchat, signaling = "CD40", split.by = "datasets", colors.ggplot = T)
+#> The legacy packages maptools, rgdal, and rgeos, underpinning the sp package,
+#> which was just loaded, were retired in October 2023.
+#> Please refer to R-spatial evolution reports for details, especially
+#> https://r-spatial.org/r/2023/05/15/evolution4.html.
+#> It may be desirable to make the sf package available;
+#> package maintainers should consider adding sf to Suggests:.
+#> The default behaviour of split.by has changed.
+#> Separate violin plots are now plotted side-by-side.
+#> To restore the old behaviour of a single split violin,
+#> set split.plot = TRUE.
+#>       
+#> This message will be shown once per session.
+#> Scale for y is already present.
+#> Adding another scale for y, which will replace the existing scale.
+#> Scale for y is already present.
+#> Adding another scale for y, which will replace the existing scale.
+#> Scale for y is already present.
+#> Adding another scale for y, which will replace the existing scale.
+```
+
+```{r}
+#export net probability for integrated plot in python
+write.csv(cellchat@net$MφOC$prob, './outs/celltype_C/prob/cellchat@net$MφOC$prob.csv')
+write.csv(cellchat@net$TregTex$prob, './outs/celltype_C/prob/cellchat@net$TregTex$prob.csv')
+```
+

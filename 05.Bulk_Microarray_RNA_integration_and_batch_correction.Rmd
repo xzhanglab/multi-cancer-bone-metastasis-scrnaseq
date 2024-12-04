@@ -1,0 +1,740 @@
+---
+title: "integration"
+output: html_document
+date: "2024-09-24"
+---
+
+
+```{r, load all datasets}
+load("/Volumes/Fengshuo_14T/Lab/Yunfeng/cancer_comparsions/Zenodo/data/Bulk_Microarray_Data(published)/PMID-19573813.RData")
+load("/Volumes/Fengshuo_14T/Lab/Yunfeng/cancer_comparsions/Zenodo/data/Bulk_Microarray_Data(published)/PMID-26667932.RData")
+load("/Volumes/Fengshuo_14T/Lab/Yunfeng/cancer_comparsions/Zenodo/data/Bulk_Microarray_Data(published)/PMID-28783718.RData")
+load("/Volumes/Fengshuo_14T/Lab/Yunfeng/cancer_comparsions/Zenodo/data/Bulk_Microarray_Data(published)/PMID-28878133.RData")
+load("/Volumes/Fengshuo_14T/Lab/Yunfeng/cancer_comparsions/Zenodo/data/Bulk_Microarray_Data(published)/PMID-31231679.RData")
+load("/Volumes/Fengshuo_14T/Lab/Yunfeng/cancer_comparsions/Zenodo/data/Bulk_Microarray_Data(published)/PMID-34193246.RData")
+```
+
+```{r}
+# Load required libraries
+library(sva)          # For ComBat batch correction
+library(ggplot2)      # For plotting
+library(dplyr)        # For data manipulation
+library(gridExtra)    # For arranging plots
+
+# -----------------------------------
+# Process Dataset 1 (gse124627)
+# -----------------------------------
+# Extract count matrix and metadata
+gse124627_counts <- gse124627.clps
+gse124627_meta <- gse124627.ann
+
+# Ensure sample names match between counts and metadata
+if (!identical(colnames(gse124627_counts), rownames(gse124627_meta))) {
+  stop("Sample names do not match between counts and metadata for Dataset 1")
+}
+
+# Create metadata data frame with one row per sample
+gse124627_meta_processed <- data.frame(
+  dataset = rep("dataset 1", ncol(gse124627_counts)),
+  stringsAsFactors = FALSE
+)
+rownames(gse124627_meta_processed) <- colnames(gse124627_counts)
+
+# -----------------------------------
+# Process Dataset 2 (allmets)
+# -----------------------------------
+allmets_counts <- allmets.clps
+allmets_meta <- allmets.ann.cal
+
+# Ensure sample names match between counts and metadata
+if (!identical(colnames(allmets_counts), rownames(allmets_meta))) {
+  stop("Sample names do not match between counts and metadata for Dataset 2")
+}
+
+# Create metadata data frame with one row per sample
+allmets_meta_processed <- data.frame(
+  dataset = rep("Zhang et al", ncol(allmets_counts)),
+  stringsAsFactors = FALSE
+)
+rownames(allmets_meta_processed) <- colnames(allmets_counts)
+
+# -----------------------------------
+# Process Dataset 3 (adrain)
+# -----------------------------------
+adrain_counts <- adrain.clps
+adrain_meta <- adrain.ann
+
+# Ensure sample names match between counts and metadata
+if (!identical(colnames(adrain_counts), rownames(adrain_meta))) {
+  stop("Sample names do not match between counts and metadata for Dataset 3")
+}
+
+# Create metadata data frame with one row per sample
+adrain_meta_processed <- data.frame(
+  dataset = rep("dataset 3", ncol(adrain_counts)),
+  stringsAsFactors = FALSE
+)
+rownames(adrain_meta_processed) <- colnames(adrain_counts)
+
+# -----------------------------------
+# Process Dataset 4 (gse77930)
+# -----------------------------------
+gse77930_counts <- gse77930.clps
+gse77930_meta <- gse77930.ann
+
+# Ensure sample names match between counts and metadata
+if (!identical(colnames(gse77930_counts), rownames(gse77930_meta))) {
+  stop("Sample names do not match between counts and metadata for Dataset 4")
+}
+
+# Create metadata data frame with one row per sample
+gse77930_meta_processed <- data.frame(
+  dataset = rep("Haider et al", ncol(gse77930_counts)),
+  stringsAsFactors = FALSE
+)
+rownames(gse77930_meta_processed) <- colnames(gse77930_counts)
+
+# -----------------------------------
+# Process Dataset 5 (gse101607)
+# -----------------------------------
+gse101607_counts_raw <- gse101607_exp
+gse101607_meta <- gse101607.ann
+
+# Adjust column names in counts to match metadata sample names
+counts_sample_names <- colnames(gse101607_counts_raw)
+counts_sample_names_adj <- sub("SAMPLE\\.", "sample ", counts_sample_names)
+
+# Remove samples without metadata from counts matrix
+samples_to_keep <- counts_sample_names_adj %in% gse101607_meta$Sample
+gse101607_counts <- gse101607_counts_raw[, samples_to_keep]
+
+# Adjust column names in counts to match metadata sample names
+colnames(gse101607_counts) <- counts_sample_names_adj[samples_to_keep]
+
+# Set "Sample" column as rownames in metadata
+rownames(gse101607_meta) <- gse101607_meta$Sample
+gse101607_meta$Sample <- NULL
+
+# Reorder metadata to match counts
+gse101607_meta <- gse101607_meta[colnames(gse101607_counts), ]
+
+# Ensure sample names match between counts and metadata
+if (!identical(colnames(gse101607_counts), rownames(gse101607_meta))) {
+  stop("Sample names still do not match between counts and metadata for Dataset 5 after adjustments.")
+}
+
+# Create metadata data frame with one row per sample
+gse101607_meta_processed <- data.frame(
+  dataset = rep("dataset 5", ncol(gse101607_counts)),
+  stringsAsFactors = FALSE
+)
+rownames(gse101607_meta_processed) <- colnames(gse101607_counts)
+
+# -----------------------------------
+# Process Dataset 6 (new dataset)
+# -----------------------------------
+# Filter 'exp' and 'metadata' to include only common samples
+common_samples_dataset6 <- intersect(colnames(exp), rownames(metadata))
+
+# Subset 'exp' to keep only the common samples
+exp_filtered <- exp[, common_samples_dataset6]
+
+# Subset 'metadata' to keep only the common samples
+metadata_filtered <- metadata[common_samples_dataset6, ]
+
+# Ensure sample names match between counts and metadata for Dataset 6
+if (!identical(colnames(exp_filtered), rownames(metadata_filtered))) {
+  stop("Sample names do not match between counts and metadata for Dataset 6 after filtering")
+}
+
+# Create metadata data frame with one row per sample for Dataset 6
+metadata_processed <- data.frame(
+  site = metadata_filtered$`BIOPSY SITE`,
+  cancer = metadata_filtered$`PRIMARY SITE`,
+  type = rep("M", ncol(exp_filtered)),
+  dataset = rep("Robinson et al", ncol(exp_filtered)),
+  stringsAsFactors = FALSE
+)
+rownames(metadata_processed) <- colnames(exp_filtered)
+
+# -----------------------------------
+# Combine All Datasets
+# -----------------------------------
+# Find common genes across all datasets (including Dataset 6)
+common_genes <- Reduce(intersect, list(
+  rownames(gse124627_counts),
+  rownames(allmets_counts),
+  rownames(adrain_counts),
+  rownames(gse77930_counts),
+  rownames(gse101607_counts),
+  rownames(exp)  # Include Dataset 6 counts
+))
+
+# Subset each count matrix to common genes
+gse124627_counts_common <- gse124627_counts[common_genes, ]
+allmets_counts_common <- allmets_counts[common_genes, ]
+adrain_counts_common <- adrain_counts[common_genes, ]
+gse77930_counts_common <- gse77930_counts[common_genes, ]
+gse101607_counts_common <- gse101607_counts[common_genes, ]
+exp_common <- exp[common_genes, ]  # Subset Dataset 6 counts to common genes
+
+# Combine count matrices
+combined_counts <- cbind(
+  gse124627_counts_common,
+  allmets_counts_common,
+  adrain_counts_common,
+  gse77930_counts_common,
+  gse101607_counts_common,
+  exp_common  # Include Dataset 6 counts
+)
+
+
+# Combine metadata
+combined_meta <- rbind(
+  gse124627_meta_processed,
+  allmets_meta_processed,
+  adrain_meta_processed,
+  gse77930_meta_processed,
+  gse101607_meta_processed,
+  metadata_processed  # Include Dataset 6 metadata
+)
+
+# Ensure sample names match between counts and metadata
+if (!identical(colnames(combined_counts), rownames(combined_meta))) {
+  stop("Sample names do not match between combined counts and metadata.")
+}
+
+# -----------------------------------
+# View the Combined Metadata
+# -----------------------------------
+head(combined_meta)
+
+
+```
+
+
+```{r}
+# -----------------------------------
+# Process Dataset 1 (gse124627)
+# -----------------------------------
+# Extract metadata
+gse124627_meta <- gse124627.ann
+
+# Ensure sample names match between counts and metadata
+if (!identical(colnames(gse124627_counts), rownames(gse124627_meta))) {
+  stop("Sample names do not match between counts and metadata for Dataset 1")
+}
+
+# Process metadata
+gse124627_meta_processed <- gse124627_meta[, c("site"), drop = FALSE]
+gse124627_meta_processed$cancer <- "BC"    # Breast Cancer
+gse124627_meta_processed$type <- "M"       # Metastatic
+gse124627_meta_processed$dataset <- "dataset 1"
+
+# Ensure row names are sample names
+rownames(gse124627_meta_processed) <- colnames(gse124627_counts)
+
+# -----------------------------------
+# Process Dataset 2 (allmets)
+# -----------------------------------
+allmets_meta <- allmets.ann.cal
+
+# Rename "Met.Site" to "site"
+colnames(allmets_meta)[colnames(allmets_meta) == "Met.Site"] <- "site"
+
+# Ensure sample names match between counts and metadata
+if (!identical(colnames(allmets_counts), rownames(allmets_meta))) {
+  stop("Sample names do not match between counts and metadata for Dataset 2")
+}
+
+# Process metadata
+allmets_meta_processed <- allmets_meta[, c("site"), drop = FALSE]
+allmets_meta_processed$cancer <- "BC"    # Breast Cancer
+allmets_meta_processed$type <- "M"       # Metastatic
+allmets_meta_processed$dataset <- "dataset 2"
+
+# Ensure row names are sample names
+rownames(allmets_meta_processed) <- colnames(allmets_counts)
+
+# -----------------------------------
+# Process Dataset 3 (adrain)
+# -----------------------------------
+adrain_counts <- adrain.clps
+adrain_meta <- adrain.ann
+
+# Ensure sample names match between counts and metadata
+if (!identical(colnames(adrain_counts), rownames(adrain_meta))) {
+  stop("Sample names do not match between counts and metadata for Dataset 3")
+}
+
+# Process metadata
+# Include the 'type' column directly from adrain_meta
+adrain_meta_processed <- adrain_meta[, c("type"), drop = FALSE]
+adrain_meta_processed$cancer <- "BC"    # Breast Cancer
+adrain_meta_processed$site <- "Bone"    # Site information
+adrain_meta_processed$dataset <- "dataset 3"
+
+# Reorder columns to match others
+adrain_meta_processed <- adrain_meta_processed[, c("site", "cancer", "type", "dataset")]
+
+# Ensure row names are sample names
+rownames(adrain_meta_processed) <- colnames(adrain_counts)
+
+
+# -----------------------------------
+# Process Dataset 4 (gse77930)
+# -----------------------------------
+gse77930_meta <- gse77930.ann
+
+# Rename "Site" to "site"
+colnames(gse77930_meta)[colnames(gse77930_meta) == "Site"] <- "site"
+
+# Ensure sample names match between counts and metadata
+if (!identical(colnames(gse77930_counts), rownames(gse77930_meta))) {
+  stop("Sample names do not match between counts and metadata for Dataset 4")
+}
+
+# Process metadata
+gse77930_meta_processed <- gse77930_meta[, c("site"), drop = FALSE]
+gse77930_meta_processed$cancer <- "PC"    # Prostate Cancer
+gse77930_meta_processed$type <- "M"       # Metastatic
+gse77930_meta_processed$dataset <- "dataset 4"
+
+# Ensure row names are sample names
+rownames(gse77930_meta_processed) <- colnames(gse77930_counts)
+
+# -----------------------------------
+# Process Dataset 5 (gse101607)
+# -----------------------------------
+gse101607_meta <- gse101607.ann
+
+# Adjust column names in counts to match metadata sample names
+counts_sample_names <- colnames(gse101607_counts_raw)
+counts_sample_names_adj <- sub("SAMPLE\\.", "sample ", counts_sample_names)
+
+# Remove samples without metadata from counts matrix
+samples_to_keep <- counts_sample_names_adj %in% gse101607_meta$Sample
+gse101607_counts <- gse101607_counts_raw[, samples_to_keep]
+
+# Adjust column names in counts to match metadata sample names
+colnames(gse101607_counts) <- counts_sample_names_adj[samples_to_keep]
+
+# Set "Sample" column as rownames in metadata
+rownames(gse101607_meta) <- gse101607_meta$Sample
+gse101607_meta$Sample <- NULL
+
+# Reorder metadata to match counts
+gse101607_meta <- gse101607_meta[colnames(gse101607_counts), ]
+
+# Ensure sample names match between counts and metadata
+if (!identical(colnames(gse101607_counts), rownames(gse101607_meta))) {
+  stop("Sample names still do not match between counts and metadata for Dataset 5 after adjustments.")
+}
+
+# Number of samples in gse101607_counts
+num_samples <- ncol(gse101607_counts)
+
+# Process metadata
+gse101607_meta_processed <- data.frame(
+  site = rep("Bone", num_samples),           # Site information
+  cancer = rep("PC", num_samples),           # Prostate Cancer
+  type = rep("M", num_samples),              # Metastatic
+  dataset = rep("dataset 5", num_samples),
+  stringsAsFactors = FALSE
+)
+rownames(gse101607_meta_processed) <- colnames(gse101607_counts)
+
+
+# -----------------------------------
+# Combine Existing Datasets (1 to 5) Metadata
+# -----------------------------------
+combined_meta <- rbind(
+  gse124627_meta_processed,
+  allmets_meta_processed,
+  adrain_meta_processed,
+  gse77930_meta_processed,
+  gse101607_meta_processed
+)
+
+
+
+# -----------------------------------
+# Process New Dataset 6
+# -----------------------------------
+# Identify common sample names between counts and metadata
+common_samples_dataset6 <- intersect(colnames(exp), rownames(metadata))
+
+# Subset 'exp' to keep only the common samples
+exp_filtered <- exp[, common_samples_dataset6]
+
+# Subset 'metadata' to keep only the common samples
+metadata_filtered <- metadata[common_samples_dataset6, ]
+
+# Ensure sample names match between counts and metadata for Dataset 6 after filtering
+if (!identical(colnames(exp_filtered), rownames(metadata_filtered))) {
+  stop("Sample names do not match between counts and metadata for Dataset 6 after filtering")
+}
+
+# Process metadata for Dataset 6
+metadata_processed <- metadata_filtered[, c("BIOPSY SITE", "PRIMARY SITE"), drop = FALSE]
+colnames(metadata_processed) <- c("site", "cancer")  # Rename columns to match combined structure
+
+# Add additional columns for Dataset 6
+metadata_processed$type <- "M"          # Type is Metastatic
+metadata_processed$dataset <- "dataset 6"  # Name the dataset
+
+# Ensure row names are sample names
+rownames(metadata_processed) <- colnames(exp_filtered)
+# -----------------------------------
+# Combine New Metadata with Existing Combined Metadata
+# -----------------------------------
+combined_meta <- rbind(
+  combined_meta,            # Existing combined metadata
+  metadata_processed        # New Dataset 6 metadata
+)
+
+# Ensure sample names match between combined counts and metadata
+if (!identical(colnames(combined_counts), rownames(combined_meta))) {
+  stop("Sample names do not match between combined counts and metadata after adding Dataset 6.")
+}
+
+# -----------------------------------
+# View the Combined Metadata
+# -----------------------------------
+head(combined_meta)
+
+```
+
+
+```{r}
+# Load required libraries
+library(sva)          # For ComBat batch correction
+library(ggplot2)      # For plotting
+library(dplyr)        # For data manipulation
+library(gridExtra)    # For arranging plots
+
+# -----------------------------------
+# Combine All Datasets (including Dataset 6)
+# -----------------------------------
+# Identify common genes across all datasets (including Dataset 6)
+common_genes <- Reduce(intersect, list(
+  rownames(gse124627_counts),
+  rownames(allmets_counts),
+  rownames(adrain_counts),
+  rownames(gse77930_counts),
+  rownames(gse101607_counts),
+  rownames(exp_filtered)  # Include Dataset 6
+))
+
+# Subset each count matrix to common genes
+gse124627_counts_common <- gse124627_counts[common_genes, ]
+allmets_counts_common <- allmets_counts[common_genes, ]
+adrain_counts_common <- adrain_counts[common_genes, ]
+gse77930_counts_common <- gse77930_counts[common_genes, ]
+gse101607_counts_common <- gse101607_counts[common_genes, ]
+exp_filtered_common <- exp_filtered[common_genes, ]  # Subset Dataset 6 to common genes
+
+# Combine count matrices
+combined_counts <- cbind(
+  gse124627_counts_common,
+  allmets_counts_common,
+  adrain_counts_common,
+  gse77930_counts_common,
+  gse101607_counts_common,
+  exp_filtered_common  # Include Dataset 6 counts
+)
+
+# Combine metadata
+combined_meta <- rbind(
+  gse124627_meta_processed,
+  allmets_meta_processed,
+  adrain_meta_processed,
+  gse77930_meta_processed,
+  gse101607_meta_processed,
+  metadata_processed  # Include Dataset 6 metadata
+)
+
+# Ensure sample names match between combined counts and metadata
+if (!identical(colnames(combined_counts), rownames(combined_meta))) {
+  stop("Sample names do not match between combined counts and metadata.")
+}
+
+# -----------------------------------
+# Batch Effect Analysis
+# -----------------------------------
+
+# Convert combined_counts to a numeric matrix
+combined_counts_matrix <- apply(combined_counts, 2, function(x) as.numeric(as.character(x)))
+rownames(combined_counts_matrix) <- common_genes
+
+# Handle missing values if any
+# combined_counts_matrix[is.na(combined_counts_matrix)] <- 0  # Uncomment if needed
+# Perform PCA before batch correction
+pca_before <- prcomp(t(combined_counts_matrix), scale. = TRUE)
+
+# Calculate percentage of variance explained by PC1 and PC2 for PCA before batch correction
+percent_variance_before <- round(100 * pca_before$sdev^2 / sum(pca_before$sdev^2), 2)
+percent_pc1_before <- percent_variance_before[1]  # Variance explained by PC1
+percent_pc2_before <- percent_variance_before[2]  # Variance explained by PC2
+
+# Data frame for plotting
+pca_data_before <- data.frame(
+  Sample = colnames(combined_counts_matrix),
+  PC1 = pca_before$x[, 1],
+  PC2 = pca_before$x[, 2],
+  dataset = combined_meta$dataset
+)
+
+# Plot PCA before batch correction
+p_before <- ggplot(pca_data_before, aes(x = PC1, y = PC2, color = dataset)) +
+  geom_point(size = 1) +
+  labs(
+    title = "PCA Before Batch Correction",
+    x = paste0("PC1: ", percent_pc1_before, "% Variance"),
+    y = paste0("PC2: ", percent_pc2_before, "% Variance")
+  ) +
+  theme_bw()
+
+# Batch Correction using ComBat without covariates
+modcombat <- NULL  # No covariates
+
+# Adjust counts using ComBat
+combat_data <- ComBat(
+  dat = combined_counts_matrix,
+  batch = combined_meta$dataset,
+  mod = modcombat,
+  par.prior = TRUE,
+  prior.plots = FALSE
+)
+
+# Perform PCA after batch correction
+pca_after <- prcomp(t(combat_data), scale. = TRUE)
+
+# Calculate percentage of variance explained by PC1 and PC2 for PCA after batch correction
+percent_variance_after <- round(100 * pca_after$sdev^2 / sum(pca_after$sdev^2), 2)
+percent_pc1_after <- percent_variance_after[1]  # Variance explained by PC1
+percent_pc2_after <- percent_variance_after[2]  # Variance explained by PC2
+
+# Data frame for plotting
+pca_data_after <- data.frame(
+  Sample = colnames(combat_data),
+  PC1 = pca_after$x[, 1],
+  PC2 = pca_after$x[, 2],
+  dataset = combined_meta$dataset
+)
+
+# Plot PCA after batch correction
+p_after <- ggplot(pca_data_after, aes(x = PC1, y = PC2, color = dataset)) +
+  geom_point(size = 1) +
+  labs(
+    title = "PCA After Batch Correction",
+    x = paste0("PC1: ", percent_pc1_after, "% Variance"),
+    y = paste0("PC2: ", percent_pc2_after, "% Variance")
+  ) +
+  theme_bw()
+
+# Display Plots Side by Side
+grid.arrange(p_before, p_after, ncol = 2)
+
+
+
+# Load the necessary library
+library(gridExtra)
+
+# Arrange plots and save as a single file
+combined_plot <- grid.arrange(p_before, p_after, ncol = 2)
+ggsave("./PCA_Batch_Correction_Comparison.pdf", plot = combined_plot, width = 6, height = 3, dpi = 300)
+```
+
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(ggalluvial)
+library(dplyr)
+library(RColorBrewer)
+
+# Prepare the data
+combined_meta$count <- 1  # Each row represents one sample
+
+# Aggregate the data
+agg_data <- combined_meta %>%
+  group_by(dataset, cancer, type, site) %>%
+  summarise(count = n()) %>%
+  ungroup()
+
+# Ensure the data is in the correct format for ggalluvial
+agg_data <- as.data.frame(agg_data)
+
+# Generate color palette for sites
+num_sites <- length(unique(agg_data$site))
+site_colors <- colorRampPalette(brewer.pal(9, "Set1"))(num_sites)
+names(site_colors) <- unique(agg_data$site)
+
+# Create the alluvial plot
+ggplot(agg_data,
+       aes(axis1 = dataset, axis2 = cancer, axis3 = type, axis4 = site,
+           y = count)) +
+  scale_x_discrete(limits = c("Dataset", "Cancer", "Type", "Site"), expand = c(.05, .05)) +
+  xlab("Categories") +
+  ylab("Number of Samples") +
+  ggtitle("Sample Distribution Across Categories") +
+  geom_alluvium(aes(fill = site), width = 1/12) +
+  scale_fill_manual(values = site_colors) +
+  geom_stratum(width = 1/12, fill = "grey", color = "black") +
+  geom_text(stat = "stratum", aes(label = after_stat(stratum)), size = 3) +
+  theme_minimal() +
+  theme(legend.position = "bottom",
+        axis.text.x = element_text(size = 12),
+        axis.title = element_text(size = 14),
+        plot.title = element_text(size = 16)) +
+  guides(fill = guide_legend(title = "Site"))
+
+# Save the plot
+ggsave(filename = "./outs/sample_distribution_alluvial_plot.pdf", width = 12, height = 8)
+
+```
+
+```{r}
+# Create a comprehensive mapping for repeated or similar tissue names
+site_mapping <- list(
+  "Liver" = c("Liver", "LIVER"),
+  "Lung" = c("Lung", "LUNG", "Lung Nodule", "lung", "Lung? Male"),
+  "Bone" = c("Bone", "BONE", "Vertebra"),
+  "Skin" = c("Skin", "SKIN", "Skin Punch"),
+  "Lymph Node" = c("Lymph Node", "LN", "Lymph node"),
+  "Peritoneum" = c("Peritoneum", "PERITONEUM", "Peritoneal Nodule", "Peritoneal Fluid"),
+  "Bladder" = c("Bladder", "BLADDER", "Bladder Neck", "BLADDER_NECK"),
+  "Subcutaneous" = c("Subq", "Subq Nodule", "Subcut. Abdomen", "Subcut. Periumbilical", "Subq Abdom. Mass", "Subq Chest Wall", "Subcutaneous", "Subq Nodule  (Arm)"),
+  "Pelvis" = c("Pelvis", "Pelvic Mass", "PELVIC_MASS"),
+  "Adrenal" = c("Adrenal", "ADRENAL"),
+  "Retroperitoneum" = c("Retroperitoneum", "RETROPERITONEAL"),
+  "Thoracic Fluid" = c("Thoracic Fluid", "Peritoneal Fluid"),
+  "Prostate" = c("Prostate", "PROSTATE"),
+  "Brain" = c("Brain", "Sphenoid Sinus", "Brain Tissue"),
+  "Back" = c("Back", "Scapular Mass"),
+  "Chest Wall" = c("Chest Wall", "Chest Wall Nodule", "Subq Chest Wall"),
+  "Abdomen" = c("Abdomen", "Abdom. Wall", "Abdom. Nodule", "Abdom. Mass"),
+  "Shoulder" = c("Shoulder", "Shoulder Mass"),
+  "Thigh" = c("Thigh", "Thigh Mass"),
+  "Ovary" = c("Ovary"),
+  "Duodenum" = c("Duodenum"),
+  "Pleura" = c("Pleura", "Pleural Mass"),
+  "Visceral" = c("Visc. other"),
+  "Soft Tissue" = c("Soft Tissue"),
+  "Appendix" = c("Appendix", "APPENDIX"),
+  "Colon" = c("Colon"),
+  "Rectus Muscle" = c("Rectus Muscle"),
+  "Pancreas" = c("Pancreas"),
+  "Omentum" = c("Omentum"),
+  "Forearm" = c("Forearm Mass"),
+  "Neck" = c("Neck", "Neck Mass"),
+  "Esophagus" = c("Esophagus"),
+  "Buttock" = c("Buttock"),
+  "Hip" = c("Hip Lesion"),
+  "Spine" = c("Spinal Mass"),
+  "Thyroid" = c("Thyroid"),
+  "Parotid" = c("Parotid"),
+  "Psoas Muscle" = c("Psoas Muscle"),
+  "Kidney" = c("Kidney", "KIDNEY"),
+  "Spleen" = c("Spleen", "SPLEEN"),
+  "Renal" = c("Renal", "RENAL"),
+  "Cervix" = c("Cervix"),
+  "Dura" = c("Dura"),
+  "Gluteus Muscle" = c("Gluteus Muscle"),
+  "Mandible" = c("Mandible"),
+  "Periaortic Mass" = c("Periaortic Mass"),
+  "Thoracic Epidural" = c("Thoracic Epidural"),
+  "Paraspinal Mass" = c("Paraspinal Mass"),
+  "Cheek" = c("Cheek"),
+  "Epidural" = c("Epidural"),
+  "Gluteal Mass" = c("Gluteal Mass"),
+  "Acetabulum" = c("Acetabulum"),
+  "Perirectal Mass" = c("Perirectal Mass"),
+  "Hilum" = c("Hilum"),
+  "Sternal Mass" = c("Sternal Mass"),
+  "Infraclavicular Mass" = c("Infraclavicular Mass"),
+  "Submandible" = c("Submandible"),
+  "Mesenteric Mass" = c("Mesenteric Mass"),
+  "Lacrimal Gland" = c("Lacrimal Gland"),
+  "Arm" = c("Arm")
+  # Add any other unmapped or new site names as necessary
+)
+
+# Convert 'site' column to character to avoid factor-related issues
+combined_meta$site <- as.character(combined_meta$site)
+
+# Standardize the names in 'combined_meta$site' based on the mapping
+for (common_name in names(site_mapping)) {
+  combined_meta$site[combined_meta$site %in% site_mapping[[common_name]]] <- common_name
+}
+
+# Convert back to factor if needed, with updated levels
+combined_meta$site <- as.factor(combined_meta$site)
+
+# View the updated unique site names
+unique(combined_meta$site)
+
+# Check the number of levels to confirm
+length(levels(combined_meta$site))
+
+
+
+
+# Create a comprehensive mapping for repeated or similar cancer types without "Cancer" in the names
+cancer_type_mapping <- list(
+  "Breast" = c("Breast", "BC"),
+  "Lung" = c("Lung"),
+  "Liver" = c("Liver"),
+  "Colorectal" = c("Colon", "Colorectal", "Rectum"),
+  "Prostate" = c("Prostate"),
+  "Bladder" = c("Bladder"),
+  "Skin" = c("Skin", "Skin (Arm)", "Skin (Cheek)", "Skin (Lip)", "Skin (Neck)"),
+  "Ovarian" = c("Ovary"),
+  "Kidney" = c("Kidney"),
+  "Pancreatic" = c("Pancreas", "Pancreaticobiliary"),
+  "Head and Neck" = c("Oral", "Oral Mass", "Orbit Of Eye", "Oropharynx", "Palate", "Larynx", "Tonsil", "Thyroid", "Tongue", "Sinus", "Mandible", "Skull Base"),
+  "Adrenal" = c("Adrenal"),
+  "Gallbladder" = c("Gall Bladder"),
+  "Bile Duct" = c("Bile Duct"),
+  "Salivary Gland" = c("Salivary Gland", "Parotid", "Parotid Gland", "Submandibular Glan"),
+  "Uterine" = c("Uterus", "Cervix"),
+  "Bone" = c("Thigh", "Tibia", "Spinal Canal", "Psoas Muscle", "Shoulder", "Hip", "Arm", "Leg", "Back", "Humerus", "Pelvis", "Scapula", "Knee", "Forearm", "Foot", "Ankle"),
+  "Brain" = c("Brain"),
+  "Testicular" = c("Testes", "Testicle", "Scrotum", "Seminal Vesicle"),
+  "Stomach" = c("Stomach"),
+  "Esophageal" = c("Esophagus"),
+  "Thymus" = c("Thymus"),
+  "Small Bowel" = c("Small Bowel"),
+  "Rectus Muscle" = c("Rectus Muscle"),
+  "Retroperitoneal" = c("Retroperitoneum"),
+  "Soft Tissue" = c("Soft Tissue"),
+  "Peritoneum" = c("Peritoneum"),
+  "Appendix" = c("Appendix"),
+  "Urethral" = c("Urethra"),
+  "Ureteral" = c("Ureter"),
+  "Mullerian" = c("Mullerian"),
+  "Unknown" = c("Unknown"),
+  "Miscellaneous" = c("Vena Cava", "Pelvis", "Shoulder", "Hip Lesion", "Spinal Canal", "Buttock", "Scalp", "Cheek", "Vater Ampulla", "Abdomen", "Urachus", "Deltoid")
+)
+
+# Convert 'cancer' column to character to avoid factor-related issues
+combined_meta$cancer <- as.character(combined_meta$cancer)
+
+# Standardize the names in 'combined_meta$cancer' based on the mapping
+for (common_name in names(cancer_type_mapping)) {
+  combined_meta$cancer[combined_meta$cancer %in% cancer_type_mapping[[common_name]]] <- common_name
+}
+
+# Convert back to factor if needed, with updated levels
+combined_meta$cancer <- as.factor(combined_meta$cancer)
+
+# View the updated unique cancer types
+unique(combined_meta$cancer)
+
+# Check the number of levels to confirm
+length(levels(combined_meta$cancer))
+
+
+save(combined_data, combined_meta, file = './data/combined_1025.RData')
+```
+

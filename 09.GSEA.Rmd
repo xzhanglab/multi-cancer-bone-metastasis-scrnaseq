@@ -1,0 +1,73 @@
+---
+title: "09.GSEA"
+output: html_document
+date: '2022-07-18'
+---
+
+
+#### GSEA analysis ####
+```{r}
+options(stringsAsFactors = F)
+library(org.Hs.eg.db)
+library(clusterProfiler)
+library(enrichplot)
+library(tidyverse)
+library(ggstatsplot)
+library(dplyr)
+library(plyr)
+```
+
+```{r,create genelist for GSEA}
+organism = 'hsa'  
+OrgDb = 'org.Hs.eg.db'
+
+
+need_DEG <- res_tbl[,c(1,3,6)] 
+
+colnames(need_DEG) <- c('gene','log2FoldChange','pvalue')
+need_DEG$SYMBOL <- need_DEG$gene
+
+
+#convert id  
+df <- bitr(need_DEG$SYMBOL, 
+           fromType = "SYMBOL",
+           toType =  "ENTREZID",
+           OrgDb = OrgDb)
+need_DEG <- merge(need_DEG, df, by='SYMBOL')  
+#write.csv(need_DEG,'need_DEG.csv')
+geneList <- need_DEG$log2FoldChange
+names(geneList) <- need_DEG$ENTREZID
+geneList <- sort(geneList, decreasing = T)   #descending order
+```
+
+```{r, enrichement by clusterprofiler}
+KEGG_kk_entrez <- gseKEGG(geneList = geneList,
+                   organism     = organism,
+                   pvalueCutoff = 0.05)  
+KEGG_kk <- DOSE::setReadable(KEGG_kk_entrez, 
+                             OrgDb=OrgDb,
+                             keyType='ENTREZID')#convert id             
+  
+
+#save(KEGG_kk_entrez, file = "./data/epithelium/by_cancer_by_pheno/BC/GSEA_KEGG_results.RData")
+#GSEA Hall markers
+##define the TERM2GENE list from msigdb.  #Homo sapiens or Mus musculus
+library(msigdbr)
+library(ExperimentHub)
+library(GSEABase)
+
+C2_t2g <- msigdbr(species = "Homo sapiens",#Homo sapiens or Mus musculus
+                  category = "C5"#, subcategory = "BP"
+                  ) %>% 
+  dplyr::select(gs_name, entrez_gene)
+head(C2_t2g)
+
+C2_kk_entrez <- GSEA(geneList, TERM2GENE = C2_t2g, pAdjustMethod = "BH", pvalueCutoff = 0.05
+                     )
+C2_kk <- DOSE::setReadable(C2_kk_entrez, 
+                             OrgDb=OrgDb,
+                             keyType='ENTREZID')
+head(C2_kk)
+head(C2_kk@result)
+#write.csv(C2_kk@result, '~/Desktop/C5_0.05_GSEA.csv')
+```

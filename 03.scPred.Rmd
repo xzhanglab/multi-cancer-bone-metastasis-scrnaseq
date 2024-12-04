@@ -1,0 +1,137 @@
+---
+title: "scPred_practice"
+author: "Fengshuo"
+date: '2022-11-21'
+output: html_document
+---
+
+```{r}
+library("scPred")
+library("Seurat")
+library("magrittr")
+library(scCustomize)
+library(Matrix)
+```
+
+```{r}
+#import ref and query data
+reference <- readRDS("./data/scPred_training data_processed/training_ref.rds")
+query <- readRDS("./data/integrated/39.integrated.rds")
+```
+
+
+```{r}
+#normolize the reference dataset
+#if the assay is "integrated" do not run nomolization
+DefaultAssay(reference) <- "RNA"
+reference <- reference %>% 
+  NormalizeData() %>% 
+  FindVariableFeatures() %>% 
+  ScaleData() %>% 
+  RunPCA() %>% 
+  RunUMAP(dims = 1:30)
+```
+
+```{r}
+#visualize the reference data set ##Figure S1A
+DimPlot_scCustom(seurat_object=reference, 
+                      reduction = "umap", 
+                      group.by = c("ct"),
+                      #ncol = 1,
+                      label = T,
+                      label.size = 4,
+                      pt.size = 0.1
+                      )
+```
+
+
+#Training classifiers with scPred
+```{r}
+#getFeatureSpace will create a scPred object stored in the @misc slot. This object will contained all required information to classify cells. See ?getFeatureSpace help documentation.
+reference <- getFeatureSpace(reference, "ct")
+```
+
+```{r}
+#Secondly, we train the classifiers for each cell using the trainModel function. By default, scPred will use a support vector machine with a radial kernel.
+reference <- trainModel(reference)
+```
+
+```{r}
+#Training probabilities for each cell in the reference data can be accessed using the get_probabilities method:
+get_probabilities(reference) %>% head()
+```
+
+```{r}
+#We can use the get_scpred method to retrieve the scPred object from the Seurat object. Printing a scPred object will show for each cell type:
+get_scpred(reference)
+```
+
+```{r}
+#To visualize the performance for each cell type we can use the plot_probabilities function:
+plot_probabilities(reference, size = 0.1)
+ggsave(filename = "scPreb_prob_curved.pdf", width = 6, height = 14, device=cairo_pdf, path = './curved/')
+```
+
+
+```{r, optional step for poor classfication}
+#A different model can be specified using the model parameter and providing the method value from caret (e.g. mda for a mixture discriminant analysis using the mda package). Additionally, if only an mda model wants to be applied to a subset of cells, we can specify this using the reclassify parameter. In this case, we want to train different models for “Mono” and “Macs” to improve their classification performance:
+reference <- trainModel(reference, 
+                        model = "svmRadial", 
+                        reclassify = c("CD56+ NK", 
+                                       "Effector/Memory CD4 T cell",
+                                       "CDP",
+                                       "Gamma-delta T cell",
+                                       "GMP",
+                                       "IFN-activated T cell",
+                                       "MPP",
+                                       "Myelocyte",
+                                       "Naive CD8 T cell",
+                                       "pre-pDC (lymphoid origin)",
+                                       "pre-pDC (myeloid origin)",
+                                       "S100A+ preNeutrophil (cycling)",
+                                       "Treg"))
+get_scpred(reference)
+#check the changes
+plot_probabilities(reference)
+```
+
+#Cell classification
+```{r}
+#First, let’s normalize the query dataset (cells to be classfied).
+query <- NormalizeData(query)
+```
+
+```{r}
+#Finally, we ca classify the cells from the query data using the scPredict function. The first argument corresponds to the query object and the second to the reference object (with a scPred model trained already).
+
+#scPred now uses Harmony to align the query data onto the training low-dimensional space used as reference. Once the data is aligned, cells are classified using the pre-trained models.
+
+#scPredict will return the query dataset. Make sure the left-side value of the <- operator corresponds to the query data.
+query <- scPredict(query, reference)
+#scPred will store the final classifications in the scpred_prediction column of the Seurat meta data. Likewise, it will store a the aligned data and store it as a scpred reduction.
+```
+```{r, visualization by scpred_prediction}
+DimPlot(query, group.by = "scpred_prediction", reduction = "scpred")
+```
+
+```{r,visualization by UMAP}
+query <- RunUMAP(query, reduction = "scpred", dims = 1:30)
+```
+
+```{r}
+DimPlot(query, group.by = c("scpred_prediction"), label = T, repel = TRUE, label.size = 1)
+ggsave(filename = "predicted.pdf", width =10, height = 5, dpi = 600, path = './outs/0712/')
+```
+
+```{r, optional}
+#plot the mannual annotated results, for comparsions
+DimPlot(query, reduction = "umap", group.by = c("integrated_snn_res.5"), label = TRUE, repel = TRUE, pt.size = 2)
+query@active.ident <- factor(query$integrated_snn_res.1.5)
+```
+
+
+```{r}
+tab <- crossTab(query, "integrated_snn_res.1.5", "scpred_prediction")
+write.csv(tab, './outs/celltype_prediction_probabilities.csv')
+saveRDS(query, './data/integrated/39.integrated.rds')
+```

@@ -1,0 +1,360 @@
+---
+title: "08.DESeq2_DEG_analysis"
+output: html_document
+date: "2023-11-11"
+---
+
+```{r}
+library(tidyverse)
+library(cowplot)
+library(edgeR)
+library(reshape2)
+library(SingleCellExperiment)
+library(pheatmap)
+library(apeglm)
+library(png)
+library(DESeq2)
+library(RColorBrewer)
+library(data.table)
+library(FactoMineR)
+library(factoextra)  
+library(tidyverse)
+library(pheatmap)
+library(DESeq2)
+library(RColorBrewer)
+library(viridis)  
+library(ggplot2)
+library(grid)
+library(ggrepel)
+library(ggrepel)
+library(Cairo)
+```
+
+#PCA
+```{r}
+# Transform counts for data visualization
+rld <- vst(DESeq, blind=TRUE)
+
+# Plot PCA
+DESeq2::plotPCA(rld, ntop = 500, intgroup = c("group.id","sample.id"))
+```
+
+```{r}
+#plot the PCA
+pcaPlot <- plotPCA(rld, ntop = 500, intgroup = c("group.id"), returnData = TRUE)
+# Convert to ggplot object
+
+# Set your desired figure size and font size
+fig_width <- 3
+fig_height <- 2
+font_size <- 3 # Adjust as needed
+point_size <- 3 # Adjust as needed
+
+# Define colors for group.id (adjust the colors as needed)
+#group_colors <- c("ctrl" = "blue", "MφOC" = "red", "TregTex"= "orange", "Mo"="black") # Replace with actual group names and desired colors
+group_colors <- c("low" = "blue", "high"= "orange") # Replace with actual group names and desired colors
+#group_colors <- c("LC" = "blue", "KC"= "orange", "BC"="red", "ctrl"="black", "CC"="purple","EC"="pink","TC"="green") # Replace with actual group names and desired colors
+
+# Generate the plot with ggrepel for non-overlapping text labels
+ggplot(pcaPlot, aes(x = PC1, y = PC2, color = group.id, label = group.id)) +
+    geom_point(size = point_size) +
+    geom_text_repel(size = font_size, 
+                    box.padding = 0.5, 
+                    point.padding = 0.3,
+                    segment.size = 0.2) +
+    scale_color_manual(values = group_colors) +
+    theme(legend.position="none", 
+          text = element_text(size = font_size),
+          panel.background = element_blank(),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank()) +
+    theme_minimal() +
+    theme(axis.text.x = element_text(size = font_size),
+          axis.text.y = element_text(size = font_size),
+          axis.title = element_text(size = font_size))
+
+
+
+#ggsave(filename = "pca_by_group_id.pdf",device = cairo_pdf, width = 6, height = 4, dpi = 300, path = './outs/epithelium/by_muts_by_pheno/KC/')
+```
+
+#Hierarchical clustering
+```{r}
+# Extract the rlog matrix from the object and compute pairwise correlation values
+rld_mat <- assay(rld)
+rld_cor <- cor(rld_mat)
+
+# Plot heatmap
+h <- pheatmap(rld_cor, annotation = cluster_metadata[, c("group.id", "sample.id"), drop=F])
+#ggsave(h, filename = "clustering.pdf",  device = cairo_pdf, width = 12, height = 9, dpi = 300, path = './outs/epithelium/by_muts_by_pheno/KC/')
+```
+
+#Running DESeq2
+```{r}
+# Run DESeq2 differential expression analysis
+DESeq <- DESeq(DESeq)
+# Plot dispersion estimates
+#We can check the fit of the DESeq2 model to our data by looking at the plot of dispersion estimates.
+plotDispEsts(DESeq)
+#ggsave(filename = "DEGseq_plot.pdf", width = 12, height = 9, dpi = 300, path = '../outs/pheno_B/MφOC_vs_TregTex/')
+```
+
+#Results
+```{r}
+#Let’s compare the stimulated group relative to the control:
+# Output results of Wald test for contrast for pos vs neg
+#method 1 design the exp and ctl groups -----------------------------------------------------------------------------------------
+levels(cluster_metadata$group.id)[1]
+levels(cluster_metadata$group.id)[2]
+levels(cluster_metadata$group.id)[3]
+levels(cluster_metadata$group.id)[4]
+levels(cluster_metadata$group.id)[5]
+levels(cluster_metadata$group.id)[6]
+levels(cluster_metadata$group.id)[7]
+
+#the following contrast matrix can only compare two groups
+contrast <- c("group.id", 
+              levels(cluster_metadata$group.id)[1],
+              #levels(cluster_metadata$group.id)[1],
+              levels(cluster_metadata$group.id)[2]
+              )
+
+res <- results(DESeq, 
+               contrast = contrast,
+               alpha = 0.05)
+
+res
+#First let’s generate the results table for all of our results:
+# Turn the results object into a tibble for use with tidyverse functions
+res_tbl <- res %>%
+        data.frame() %>%
+        rownames_to_column(var="gene") %>%
+        as_tibble()
+
+# Check results output
+res_tbl
+
+# Write all results to file
+write.csv(res_tbl,
+          paste0("results/", clusters[1], "_", levels(cluster_metadata$sample)[2], "_vs_", levels(cluster_metadata$sample)[1], "_all_genes.csv"),
+          quote = FALSE, 
+          row.names = FALSE)
+
+
+#method 2, design exp and ctl group by default comparisons----------------------------------------------------------------------------------------------
+# Check the coefficients for the comparison
+resultsNames(DESeq)
+#[1] "Intercept"                 "group.id_DSS_vs_ctrl"      "group.id_DSS.B109_vs_ctrl"
+
+# Generate results object
+res <- results(DESeq, 
+               name = "group.id_pos_vs_neg", 
+               alpha = 0.05)
+
+# Shrink the log2 fold changes to be more appropriate using the apeglm method - should cite [paper]() when using this method
+res <- lfcShrink(DESeq, 
+                 coef = "group.id_DSS_vs_ctrl",
+                 res=res,
+                 type = "apeglm")
+```
+
+#Table of results for all genes
+```{r}
+# Turn the results object into a tibble for use with tidyverse functions
+res_tbl <- res %>%
+        data.frame() %>%
+        rownames_to_column(var="gene") %>%
+        as_tibble()
+
+
+# Check results output
+res_tbl
+res_tbl <- na.omit(res_tbl)
+# Write all results to file
+#write.csv(res_tbl,
+#          quote = FALSE, 
+#          row.names = FALSE,
+#          './outs/epithelium/by_cancer_by_pheno/BC/res_tbl.csv')
+
+#saveRDS(res_tbl, './outs/epithelium/by_cancer_by_pheno/BC/res_tbl.rds')
+```
+
+Table of results for significant genes
+```{r}
+# Set thresholds
+pvalue_cutoff <- 0.05
+
+# Subset the significant results
+sig_res <- dplyr::filter(res_tbl, pvalue < pvalue_cutoff) %>%
+        dplyr::arrange(pvalue)
+
+# Check significant genes output
+sig_res
+
+#write.csv(sig_res,
+#          quote = FALSE, 
+#          row.names = FALSE,
+#          './outs/epithelium/by_cancer_by_pheno/BC/sig_res.csv')
+
+#saveRDS(sig_res, './outs/epithelium/by_cancer_by_pheno/BC/sig_res.rds')
+```
+
+```{r, normolize}
+normalized_counts <- counts(DESeq, normalized = TRUE)
+```
+
+#Scatterplot of normalized expression of top 20 most significant genes
+##Now that we have identified the significant genes, we can plot a scatterplot of the top 20 significant genes. This plot is a good check to make sure that we are interpreting our fold change values correctly, as well.
+```{r}
+## ggplot of top genes
+##fitering parameters
+log2FC_cutoff = log2(1.5)
+pvalue_cutoff = 0.05
+
+##select the differential gene list 
+need_DEG <- sig_res[,c(1,3,6)] #select log2FoldChange, p value information
+colnames(need_DEG) <- c('gene','log2FoldChange','p_value') 
+
+need_DEG$significance  <- as.factor(ifelse(need_DEG$p_value < pvalue_cutoff & abs(need_DEG$log2FoldChange) > log2FC_cutoff, ifelse(need_DEG$log2FoldChange > log2FC_cutoff ,'UP','DOWN'),'NOT'))
+
+title <- paste0(' Up :  ',nrow(need_DEG[need_DEG$significance =='UP',]) ,
+                     '\n Down : ',nrow(need_DEG[need_DEG$significance =='DOWN',]),
+                     '\n FoldChange >= ',round(2^log2FC_cutoff,3))
+
+need_DEG$delabel <- NA
+need_DEG$delabel[need_DEG$significance != "NOT"] <- row.names(need_DEG)[need_DEG$significance != "NOT"]
+
+g <- ggplot(data=need_DEG, 
+            aes(x=log2FoldChange, y=-log10(p_value), 
+                color=significance, label=delabel)) +
+  #dots and background
+  geom_point(alpha=0.4, size=1) +
+  theme_classic()+ #grid
+  xlab("log2 ( FoldChange )") + 
+  ylab("-log10 ( P.value )") +
+  ggtitle( title ) +
+  scale_colour_manual(values = c('blue','grey'
+                                 ,'red'))+ 
+  scale_fill_brewer(palette="Set1")+
+  geom_vline(xintercept = c(-log2FC_cutoff,log2FC_cutoff),lty=4,col="grey",lwd=0.5) +
+  geom_hline(yintercept = -log10(pvalue_cutoff),lty=4,col="grey",lwd=0.5) +
+  
+  theme(plot.title = element_text(hjust = 0.5), 
+        plot.margin=unit(c(2,2,2,2),'lines'), #top, right, bottom, left
+        legend.title = element_blank(), 
+        legend.position="right")
+g
+
+#ggsave(g,filename = './outs/epithelium/by_cancer_by_pheno/BC/vocanol_no_labeling.pdf',width =6,height =4, dpi= 300)
+
+
+```
+
+```{r, with dot labeled}
+need_DEG$significance<- "NOT"
+
+need_DEG$significance[need_DEG$log2FoldChange > 0.58 & need_DEG$p_value < 0.05] <- "UP"
+
+need_DEG$significance[need_DEG$log2FoldChange < -0.58 & need_DEG$p_value < 0.05] <- "DOWN"
+
+
+need_DEG %>% remove_rownames %>% column_to_rownames(var="gene")
+
+need_DEG$delabel <- NA
+need_DEG$delabel[need_DEG$significance != "NOT"] <- need_DEG$gene[need_DEG$significance != "NOT"]
+
+v <- ggplot(data=need_DEG, aes(x=log2FoldChange, y=-log10(p_value), col=significance, label=delabel)) +
+        geom_point() + 
+        theme_minimal() +
+        geom_text_repel() +
+        scale_color_manual(values=c("blue"
+                                    , "grey"
+                                    , "red")) +
+        geom_vline(xintercept=c(-0.6, 0.6),lty=2,col="grey",lwd=0.5) +
+        #geom_hline(yintercept=-log10(0.05), lty=4,col="grey",lwd=0.8) +
+    geom_point(alpha=0.4, size=1) +
+  theme_classic()+ #grid
+  xlab("log2 ( Fold Change )") + 
+  ylab("-log10 ( P value )") +
+  ggtitle( title ) +
+  scale_colour_manual(values = c('blue'
+                                 ,'grey'
+                                 ,'red'))+ 
+  geom_vline(xintercept = c(-log2FC_cutoff,log2FC_cutoff),lty=2,col="grey",lwd=0.5) +
+  geom_hline(yintercept = -log10(pvalue_cutoff),lty=2,col="grey",lwd=0.5) +
+  
+  theme(plot.title = element_text(hjust = 0.5), 
+        plot.margin=unit(c(2,2,2,2),'lines'), #top, right, bottom, left
+        legend.title = element_blank(), 
+        legend.position="right")
+
+v
+
+#ggsave(v,filename = './outs/epithelium/by_cancer_by_pheno/BC/vocanol_labeling.pdf',width =6,height =4, dpi= 300)
+
+```
+
+```{r, Heatmap}
+# Heatmap
+## Extract normalized counts for significant genes only
+sig_counts <- normalized_counts[rownames(normalized_counts) %in% sig_res$gene, ]
+
+## Set a color-blind friendly palette
+heat_colors <- rev(brewer.pal(10, "PuOr"))
+breaks <- seq(-1.5, 1.5, length.out = length(heat_colors) + 1)
+
+## Run pheatmap using the metadata data frame for the annotation
+hp1 <- pheatmap(sig_counts, 
+         color = heat_colors, 
+        breaks = breaks,  # Use the defined breaks
+         cluster_rows = TRUE, 
+         show_rownames = FALSE,
+         annotation = cluster_metadata[, c("sample.id", "group.id", "cell.id")], 
+         border_color = NA, 
+         fontsize = 7, 
+         scale = "row", 
+         fontsize_row = 10, 
+         height = 20,
+         angle_col = 45)
+
+#ggsave(hp1, filename = 'heatmap_sig_genes.pdf',width =10,height =18, dpi = 300, path = './outs/epithelium/by_cancer_by_pheno/BC/')
+```
+
+
+```{r}
+#make the plot color darker, adjust the color scale
+# Function to make colors darker
+sig_counts <- normalized_counts[rownames(normalized_counts) %in% sig_res$gene, ]
+
+## Set a color-blind friendly palette
+heat_colors <- rev(brewer.pal(10, "PuOr"))
+
+#assign the colors for annotation
+#group_colors <- c(#"ctrl" = "black", "MφOC" = "red", 
+                  #"high"= "orange", "low"="purple")
+group_colors <- c("MφΟC" = "blue", "ΤregTex"= "orange", "Mo" = "green") # Replace with actual group names and desired colors
+
+cluster_metadata$group.id <- factor(cluster_metadata$group.id)
+# Create a list of annotation colors
+annotation_colors <- list(group.id = group_colors)
+# Define the breaks for the colors, ensuring to cover the range -4 to 4
+breaks <- seq(-1, 1, length.out = length(heat_colors) + 0.5)
+
+# Run pheatmap using the metadata data frame for the annotation
+hp1 <- pheatmap(sig_counts, 
+         color = heat_colors, 
+         breaks = breaks,  # Use the defined breaks
+         cluster_rows = TRUE, 
+         show_rownames = FALSE,
+         annotation_colors = annotation_colors, 
+         annotation = cluster_metadata[, c("sample.id", "group.id", "cell.id")], 
+         border_color = NA, 
+         fontsize = 7, 
+         scale = "row", 
+         fontsize_row = 5, 
+         height = 15,
+         angle_col = 90)
+#ggsave(hp1, filename = 'heatmap_sig_genes_.pdf',device = cairo_pdf, width =8,height =10, dpi = 300, path = './outs/stroma/OB_macs_vs_t/')
+
+```
+

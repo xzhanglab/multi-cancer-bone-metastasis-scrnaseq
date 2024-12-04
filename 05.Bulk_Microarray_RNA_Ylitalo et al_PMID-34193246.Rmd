@@ -1,0 +1,193 @@
+---
+title: "GSE101607_prostate"
+output: html_document
+date: "2024-09-17"
+---
+
+```{r}
+# Load necessary libraries
+rm(list=ls())
+library(GSVA)
+library(GSEABase)
+library(pheatmap)
+```
+
+
+```{r}
+# Load required libraries
+library(GSVA)
+library(GSEABase)
+library(pheatmap)
+library(RColorBrewer)
+library(viridis)
+
+# Load your data
+load("/Volumes/Fengshuo_14T/Lab/Yunfeng/cancer_comparsions/Zenodo/data/Bulk_Microarray_Data(published)/PMID-34193246.RData")
+marker <- readRDS("./data/Bulk_Microarray_Data(published)/cell_type_markers_from_scRNA_data_for_estimation.rds")
+
+# Assuming 'gse101607_exp_agg' is your expression data matrix with genes as rows and samples as columns
+expression_matrix <- gse101607_exp_agg
+
+# Convert the expression matrix to uppercase and ensure it's a numeric matrix
+rownames(expression_matrix) <- toupper(rownames(expression_matrix))
+expression_matrix <- as.matrix(expression_matrix)
+expression_matrix <- apply(expression_matrix, 2, as.numeric)
+rownames(expression_matrix) <- toupper(rownames(gse101607_exp_agg))
+
+# Split the marker data into cell types and only keep the top 10 genes per cell type
+cell_type_markers <- split(marker$gene, marker$cluster)
+cell_type_markers <- lapply(cell_type_markers, function(genes) {
+  toupper(genes[1:min(10, length(genes))])  # Keep top 10 genes, and make them uppercase
+})
+
+# Check for and remove any empty marker sets
+empty_markers <- sapply(cell_type_markers, function(x) length(x) == 0)
+
+if (any(empty_markers)) {
+  print("Warning: Some cell type markers are empty:")
+  print(names(cell_type_markers)[empty_markers])
+  
+  # Remove empty marker sets
+  cell_type_markers <- cell_type_markers[!empty_markers]
+}
+
+# Check if the gene symbols in cell_type_markers match those in expression_matrix
+valid_genes <- sapply(cell_type_markers, function(genes) {
+  intersect(genes, rownames(expression_matrix))
+})
+
+# Remove cell types with no valid genes
+valid_marker_sets <- sapply(valid_genes, length) > 0
+cell_type_markers <- cell_type_markers[valid_marker_sets]
+
+# Run ssGSEA to calculate enrichment scores using all valid cell types
+ssgsea_scores_all <- gsva(expression_matrix, cell_type_markers, method='ssgsea', ssgsea.norm=TRUE)
+
+# Ensure 'Sample' column in gse101607.ann matches the format of colnames in expression_matrix
+gse101607.ann$Sample <- toupper(gse101607.ann$Sample)  # Ensure uppercase
+gse101607.ann$Sample <- gsub(" ", ".", gse101607.ann$Sample)  # Replace space with "."
+
+# Set the rownames of gse101607.ann to the 'Sample' column for matching
+rownames(gse101607.ann) <- gse101607.ann$Sample
+
+# Reorder the samples based on the new sample annotation
+common_samples <- intersect(colnames(ssgsea_scores_all), rownames(gse101607.ann))
+
+# Subset both gse101607.ann and ssgsea_scores_all to keep only common samples
+gse101607.ann <- gse101607.ann[common_samples, ]
+ssgsea_scores_all <- ssgsea_scores_all[, common_samples]
+
+# Scale the data
+ssgsea_scores_scaled <- t(scale(t(ssgsea_scores_all)))
+
+# Generate heatmap
+breaks <- seq(-1.5, 1.5, length.out = 100)
+
+# Since 'Site' is not available, we don't need sample annotations for now
+# Generate the heatmap without sample annotations
+pheatmap(ssgsea_scores_scaled,
+         breaks = breaks,
+         clustering_distance_rows = 'correlation',
+         clustering_distance_cols = 'correlation',
+         clustering_method = 'complete',
+         show_colnames = TRUE,
+         show_rownames = TRUE,
+         cluster_rows = TRUE,
+         cluster_cols = TRUE,
+         fontsize_row = 10,
+         fontsize_col = 10)
+
+```
+
+
+```{r}
+# Load required libraries
+library(GSVA)
+library(GSEABase)
+library(pheatmap)
+library(RColorBrewer)
+library(viridis)
+
+# Load your data
+load("~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Human_Bone_Mets_Comparsion_scRNA/Additional human metastasis datasets/Bulk_Microarray/data/Prostate - GSE101607.RData")
+marker <- readRDS("~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Human_Bone_Mets_Comparsion_scRNA/Additional human metastasis datasets/Bulk_Microarray/data/markers_from_scRNA.rds")
+
+# Assuming 'gse101607_exp_agg' is your expression data matrix with genes as rows and samples as columns
+expression_matrix <- gse101607_exp_agg
+
+# Convert the expression matrix to uppercase and ensure it's a numeric matrix
+rownames(expression_matrix) <- toupper(rownames(expression_matrix))
+expression_matrix <- as.matrix(expression_matrix)
+expression_matrix <- apply(expression_matrix, 2, as.numeric)
+rownames(expression_matrix) <- toupper(rownames(gse101607_exp_agg))
+
+# Split the marker data into cell types and only keep the top 10 genes per cell type
+cell_type_markers <- split(marker$gene, marker$cluster)
+cell_type_markers <- lapply(cell_type_markers, function(genes) {
+  toupper(genes[1:min(10, length(genes))])  # Keep top 10 genes, and make them uppercase
+})
+
+# Check for and remove any empty marker sets
+empty_markers <- sapply(cell_type_markers, function(x) length(x) == 0)
+
+if (any(empty_markers)) {
+  print("Warning: Some cell type markers are empty:")
+  print(names(cell_type_markers)[empty_markers])
+  
+  # Remove empty marker sets
+  cell_type_markers <- cell_type_markers[!empty_markers]
+}
+
+# Check if the gene symbols in cell_type_markers match those in expression_matrix
+valid_genes <- sapply(cell_type_markers, function(genes) {
+  intersect(genes, rownames(expression_matrix))
+})
+
+# Remove cell types with no valid genes
+valid_marker_sets <- sapply(valid_genes, length) > 0
+cell_type_markers <- cell_type_markers[valid_marker_sets]
+
+# Run ssGSEA to calculate enrichment scores using all valid cell types
+ssgsea_scores_all <- gsva(expression_matrix, cell_type_markers, method='ssgsea', ssgsea.norm=TRUE)
+
+# Ensure 'Sample' column in gse101607.ann matches the format of colnames in expression_matrix
+gse101607.ann$Sample <- toupper(gse101607.ann$Sample)  # Ensure uppercase
+gse101607.ann$Sample <- gsub(" ", ".", gse101607.ann$Sample)  # Replace space with "."
+
+# Set the rownames of gse101607.ann to the 'Sample' column for matching
+rownames(gse101607.ann) <- gse101607.ann$Sample
+
+# Reorder the samples based on the new sample annotation
+common_samples <- intersect(colnames(ssgsea_scores_all), rownames(gse101607.ann))
+
+# Subset both gse101607.ann and ssgsea_scores_all to keep only common samples
+gse101607.ann <- gse101607.ann[common_samples, ]
+ssgsea_scores_all <- ssgsea_scores_all[, common_samples]
+
+# Filter cell types based on your specified list
+cell_types_to_keep <- c("pro Mono", "CD14hi Mono", "CD16hi Mono", "OC", "Mφ", "CD4 Treg", "CD8 Tex")
+
+# Subset the ssGSEA scores for the desired cell types
+ssgsea_scores_filtered <- ssgsea_scores_all[rownames(ssgsea_scores_all) %in% cell_types_to_keep, ]
+
+# Scale the data after filtering
+ssgsea_scores_scaled <- t(scale(t(ssgsea_scores_filtered)))
+
+# Generate heatmap
+breaks <- seq(-1.5, 1.5, length.out = 100)
+
+# Generate the heatmap without sample annotations
+pheatmap(ssgsea_scores_scaled,
+         breaks = breaks,
+         clustering_distance_rows = 'correlation',
+         clustering_distance_cols = 'correlation',
+         clustering_method = 'complete',
+         show_colnames = TRUE,
+         show_rownames = TRUE,
+         cluster_rows = F,
+         cluster_cols = TRUE,
+         fontsize_row = 10,
+         fontsize_col = 10)
+
+```
+

@@ -1,0 +1,2363 @@
+---
+title: "10.GSVA"
+output: html_document
+date: "2024-11-21"
+---
+
+# Load necessary libraries
+```{r}
+library(DESeq2)
+library(GSVA)
+library(limma)
+library(ComplexHeatmap)
+library(EnhancedVolcano)
+library(GSEABase)
+library(circlize)
+# Function to read GMT file
+readGMT <- function(file) {
+    getGmt(file)
+}
+```
+
+
+```{r}
+# Normalizing the count data
+DESeq <- readRDS("/Volumes/Fengshuo_14T/Lab/Yunfeng/cancer_comparsions/Zenodo/data/DESeq2_obj_archetype_comparsion/Mono.DESeq.rds")
+DESeq <- estimateSizeFactors(DESeq)
+norm_counts <- counts(DESeq, normalized = TRUE)
+# Extract the normalized expression matrix
+exprs_data <- assay(DESeq)
+```
+
+```{r}
+# Step 2: Run GSVA
+gene_sets <- readGMT("./data/msigdb_v2023.2.Hs_GMTs/msigdb.v2023.2.Hs.symbols.gmt") # specify the path to your .gmt file
+#gene_sets <- readGMT("~/OneDrive - Baylor College of Medicine/Lab/Zhan/202308_IIA_combine_ic/data/MsigDB/msigdb_v2023.2.Hs_GMTs/c5.all.v2023.2.Hs.symbols.gmt") # specify the path to your .gmt file
+#gene_sets <- readGMT("~/OneDrive - Baylor College of Medicine/Lab/Zhan/202308_IIA_combine_ic/data/MsigDB/msigdb_v2023.2.Hs_GMTs/C5_immune_bone.gmt") # specify the path to your .gmt file
+
+gsva_res <- gsva(exprs_data, gene_sets, method="gsva", min.sz=10, max.sz=500, verbose=TRUE)
+saveRDS(gsva_res, './outs/GSVA_tex/gsva_res.all.rds')
+```
+#Step 1: Set Up the Design Matrix with All Groups
+#First, you need to create a design matrix that includes all your groups. Instead of comparing just two groups, we'll set up the design matrix to model each group separately.
+```{r}
+# Set up the design matrix with all groups (without an intercept)
+design <- model.matrix(~ 0 + group.id, data = colData(DESeq))
+colnames(design) <- levels(colData(DESeq)$group.id)
+```
+
+#Step 2: Fit the Linear Model
+#Use the design matrix to fit the linear model with your GSVA results.
+```{r}
+# Fit the linear model
+fit <- lmFit(gsva_res, design)
+```
+
+Step 3: Define Contrasts for Multiple Comparisons
+Now, you can define contrasts to compare groups. You can perform:
+Pairwise comparisons between all groups.
+Comparison of each group against the average of the others.
+An overall test to identify any gene sets that differ among the groups.
+
+```{r, Overall Test Using F-Statistics}
+#For an overall test to see if there are any differences among the groups:
+# Apply empirical Bayes moderation
+fit2 <- eBayes(fit)
+
+# Get the top gene sets sorted by F-statistic
+top_gene_sets <- topTable(fit2, coef = NULL, number = Inf, sort.by = "F")
+
+# View the top gene sets
+head(top_gene_sets)
+length(rownames(top_gene_sets))
+saveRDS(top_gene_sets, './outs/GSVA_tex/top_gene_sets.all.rds')
+```
+
+```{r}
+library(ComplexHeatmap)
+library(circlize)
+
+# Create a sample annotation data frame
+sample_annotation <- data.frame(
+  group.id = colData(DESeq)$group.id
+)
+rownames(sample_annotation) <- colnames(gsva_res)
+
+# Define colors for each group
+group_levels <- unique(sample_annotation$group.id)
+group_colors <- setNames(
+  colorRampPalette(brewer.pal(8, "Set1"))(length(group_levels)),
+  group_levels
+)
+
+# Create a HeatmapAnnotation
+ha <- HeatmapAnnotation(
+  df = sample_annotation,
+  col = list(group.id = group_colors)
+)
+
+# Select top gene sets for visualization
+top_gene_set_names <- rownames(top_gene_sets)[1:20]  # Top 20 gene sets
+
+# Create the heatmap
+heatmap <- Heatmap(
+  gsva_res[top_gene_set_names, ],
+  name = "GSVA Score",
+  top_annotation = ha,
+  show_column_names = T,
+  cluster_rows = TRUE,
+  cluster_columns = T,
+  column_title = "Samples",
+  row_title = "Gene Sets"
+)
+
+# Draw the heatmap
+draw(heatmap)
+
+length(rownames(top_gene_sets))
+```
+
+```{r}
+#filtering the pathways:
+# Assuming 'top_gene_sets' is your results DataFrame from the limma analysis
+
+# Filter pathways with adjusted p-value less than 0.05
+significant_gene_sets <- top_gene_sets[top_gene_sets$adj.P.Val < 0.05, ]
+
+# Check if 'MφOC' column exists in your DataFrame
+# If the column name is different, replace 'MφOC' with the correct column name
+
+# Sort the significant pathways by the 'MφOC' column in descending order
+ranked_gene_sets <- significant_gene_sets[order(-significant_gene_sets$`TregTex`), ]
+
+# View the first few rows of the ranked gene sets
+head(ranked_gene_sets)
+length(rownames(ranked_gene_sets))
+
+write.csv(ranked_gene_sets, './outs/GSVA_by_celltype_summarized_2/Tex_ranked_gene_sets.csv')
+saveRDS(ranked_gene_sets, './outs/GSVA_by_celltype_summarized_2/Tex_ranked_gene_sets.rds')
+
+```
+
+```{r}
+# Select Gene Sets for Plotting
+# Specify the number of gene sets to plot
+num_gene_sets <- 200
+
+# Get the names of the top gene sets
+gene_set_names <- rownames(ranked_gene_sets)[1:num_gene_sets]
+
+# Ensure that you don't exceed the number of available gene sets
+gene_set_names <- gene_set_names[!is.na(gene_set_names)]
+
+
+
+library(ComplexHeatmap)
+library(circlize)
+library(RColorBrewer)
+
+# Create the sample annotation data frame
+sample_annotation <- data.frame(
+  group.id = colData(DESeq)$group.id
+)
+rownames(sample_annotation) <- colnames(gsva_res)
+
+# Define colors for each group
+group_levels <- unique(sample_annotation$group.id)
+group_colors <- setNames(
+  colorRampPalette(brewer.pal(8, "Set1"))(length(group_levels)),
+  group_levels
+)
+
+# Create a HeatmapAnnotation
+ha <- HeatmapAnnotation(
+  df = sample_annotation,
+  col = list(group.id = group_colors)
+)
+
+# Subset the gsva_res matrix to include only the selected gene sets
+gsva_res_sub <- gsva_res[gene_set_names, ]
+
+# Define color function based on data range
+min_score <- min(gsva_res_sub)
+max_score <- max(gsva_res_sub)
+color_fun <- colorRamp2(c(min_score, 0, max_score), c("blue", "white", "red"))
+
+# Create the heatmap
+heatmap <- Heatmap(
+  gsva_res_sub,
+  name = "GSVA Score",
+  top_annotation = ha,
+  show_column_names = FALSE,
+  cluster_rows = TRUE,
+  cluster_columns = TRUE,
+  column_title = "Samples",
+  row_title = "Gene Sets",
+  col = color_fun,
+  row_names_gp = gpar(fontsize = 6)  # Adjust font size as needed
+)
+
+# Draw the heatmap
+draw(heatmap)
+
+```
+
+
+```{r}
+# Get the names of the gene sets to plot
+gene_set_names <- rownames(ranked_gene_sets)
+
+library(ComplexHeatmap)
+library(circlize)
+library(RColorBrewer)
+
+# Create the sample annotation data frame
+sample_annotation <- data.frame(
+  group.id = colData(DESeq)$group.id
+)
+rownames(sample_annotation) <- colnames(gsva_res)
+
+# Define colors for each group
+group_levels <- unique(sample_annotation$group.id)
+group_colors <- setNames(
+  colorRampPalette(brewer.pal(8, "Set1"))(length(group_levels)),
+  group_levels
+)
+
+# Create a HeatmapAnnotation
+ha <- HeatmapAnnotation(
+  df = sample_annotation,
+  col = list(group.id = group_colors)
+)
+
+# Subset the gsva_res matrix to include only the selected gene sets
+gsva_res_sub <- gsva_res[gene_set_names, ]
+
+# Ensure the gene sets are ordered as in 'ranked_gene_sets'
+gsva_res_sub <- gsva_res_sub[gene_set_names, ]
+
+# Define color function based on data range
+min_score <- min(gsva_res_sub)
+max_score <- max(gsva_res_sub)
+color_fun <- colorRamp2(c(min_score, 0, max_score), c("blue", "white", "red"))
+
+# Adjust figure size by setting width and height
+heatmap <- Heatmap(
+  gsva_res_sub,
+  name = "GSVA Score",
+  top_annotation = ha,
+  show_column_names = FALSE,
+  cluster_rows = TRUE,
+  cluster_columns = TRUE,
+  column_title = "Samples",
+  row_title = "Gene Sets",
+  col = color_fun,
+  row_names_gp = gpar(fontsize = 10)
+)
+
+# Draw the heatmap
+draw(heatmap)
+
+```
+
+
+##joint the celltypes
+```{r}
+#Step 1: Load and Prepare Data
+# Load your ranked_gene_sets data frames
+# Replace these with your actual data frames
+ranked_gene_sets_macrophage <- readRDS("~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_macs/top_gene_sets.rds")
+length(rownames(ranked_gene_sets_macrophage))
+ranked_gene_sets_treg <- top_gene_sets   # For Treg cells
+length(rownames(ranked_gene_sets_treg))
+# Find common gene set names
+common_gene_sets <- intersect(rownames(ranked_gene_sets_macrophage), rownames(ranked_gene_sets_treg))
+length(common_gene_sets)
+
+
+
+# Decide how many gene sets to plot
+num_gene_sets <- 50  # Adjust as needed
+
+# From the common gene sets, select the top gene sets
+# Here, we'll use the order from the macrophage dataset
+gene_set_names <- rownames(ranked_gene_sets_macrophage)[rownames(ranked_gene_sets_macrophage) %in% common_gene_sets][1:num_gene_sets]
+
+# Ensure that you don't exceed the number of available gene sets
+gene_set_names <- gene_set_names[!is.na(gene_set_names)]
+
+
+
+#Step 2: Extract and Combine GSVA Results
+#Subset the GSVA results to include only the selected gene sets:
+# Subset the GSVA results for the selected gene sets
+gsva_res_macrophage <- readRDS("~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_macs/gsva_res.C5.rds")
+gsva_res_macrophage_sub <- gsva_res_macrophage[gene_set_names, ]
+gsva_res_treg <- readRDS("~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_treg/gsva_res.C5.rds")
+gsva_res_treg_sub <- gsva_res_treg[gene_set_names, ]
+#Adjust sample names to include cell type information:
+# Append cell type to sample names for uniqueness
+colnames(gsva_res_macrophage_sub) <- paste0(colnames(gsva_res_macrophage_sub), "_Macrophage")
+colnames(gsva_res_treg_sub) <- paste0(colnames(gsva_res_treg_sub), "_Treg")
+#Combine the GSVA results:
+# Combine the GSVA results into one matrix
+gsva_res_combined <- cbind(gsva_res_macrophage_sub, gsva_res_treg_sub)
+
+
+
+#Step 3: Create Sample Annotations
+#Create sample annotations for both cell types:
+# For macrophage samples
+DESeq_macrophage <- readRDS("~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_macs/DESeq.rds")
+sample_annotation_macrophage <- data.frame(
+  group.id = colData(DESeq_macrophage)$group.id,
+  cell.type = "Macrophage"
+)
+rownames(sample_annotation_macrophage) <- paste0(colnames(gsva_res_macrophage_sub), "_Macrophage")
+
+
+# For Treg samples
+DESeq_treg <- readRDS("~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_treg/DESeq.rds")
+sample_annotation_treg <- data.frame(
+  group.id = colData(DESeq_treg)$group.id,
+  cell.type = "Treg"
+)
+rownames(sample_annotation_treg) <- paste0(colnames(gsva_res_treg_sub), "_Treg")
+
+# Combine the sample annotations
+sample_annotation_combined <- rbind(sample_annotation_macrophage, sample_annotation_treg)
+
+#Ensure that the row names of sample_annotation_combined match the column names of gsva_res_combined:
+# Check alignment
+all(rownames(sample_annotation_combined) == colnames(gsva_res_combined))
+# If FALSE, ensure that the sample names are correctly matched
+
+
+
+
+#Step 4: Plot the Heatmap
+library(ComplexHeatmap)
+library(circlize)
+library(RColorBrewer)
+
+# Define colors for each group
+group_levels <- unique(sample_annotation_combined$group.id)
+group_colors <- setNames(
+  colorRampPalette(brewer.pal(8, "Set1"))(length(group_levels)),
+  group_levels
+)
+
+# Define colors for cell types
+cell_type_levels <- unique(sample_annotation_combined$cell.type)
+cell_type_colors <- setNames(
+  colorRampPalette(brewer.pal(8, "Pastel1"))(length(cell_type_levels)),
+  cell_type_levels
+)
+
+
+# Create the HeatmapAnnotation
+ha <- HeatmapAnnotation(
+  df = sample_annotation_combined,
+  col = list(
+    group.id = group_colors,
+    cell.type = cell_type_colors
+  ),
+  annotation_legend_param = list(
+    group.id = list(title = "Group ID"),
+    cell.type = list(title = "Cell Type")
+  )
+)
+
+
+# Define color function based on data range
+min_score <- min(gsva_res_combined)
+max_score <- max(gsva_res_combined)
+color_fun <- colorRamp2(c(min_score, 0, max_score), c("blue", "white", "red"))
+
+
+# Create the heatmap
+heatmap <- Heatmap(
+  gsva_res_combined,
+  name = "GSVA Score",
+  top_annotation = ha,
+  show_column_names = FALSE,
+  cluster_rows = TRUE,
+  cluster_columns = TRUE,
+  column_title = "Samples",
+  row_title = "Gene Sets",
+  col = color_fun,
+  row_names_gp = gpar(fontsize = 8),  # Adjust font size as needed
+  column_split = sample_annotation_combined$cell.type,  # Separate columns by cell type
+  column_title_gp = gpar(fontsize = 12, fontface = "bold")
+)
+
+
+# Draw the heatmap
+draw(heatmap)
+
+
+```
+
+```{r}
+# Load necessary libraries
+library(ComplexHeatmap)
+library(circlize)
+library(RColorBrewer)
+
+# Step 1: Load and Prepare Data
+# Load your GSVA results for both cell types
+gsva_res_macrophage <- readRDS("~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_macs/gsva_res.C5_immune_bone.rds")
+gsva_res_treg <- readRDS("~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_treg/gsva_res.C5_immune_bone.rds")
+# Load DESeq datasets for both cell types
+DESeq_macrophage <- readRDS("~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_macs/DESeq.rds")
+DESeq_treg <- readRDS("~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_treg/DESeq.rds")
+
+# Process sample names to extract sample IDs
+# For macrophage samples
+colnames(gsva_res_macrophage) <- tolower(colnames(gsva_res_macrophage))
+colnames(gsva_res_macrophage) <- gsub("[^a-z0-9_]", "", colnames(gsva_res_macrophage))
+colnames(gsva_res_macrophage) <- sapply(strsplit(colnames(gsva_res_macrophage), "_"), function(x) tail(x, 1))
+
+colnames(DESeq_macrophage) <- tolower(colnames(DESeq_macrophage))
+colnames(DESeq_macrophage) <- gsub("[^a-z0-9_]", "", colnames(DESeq_macrophage))
+colData(DESeq_macrophage)$sample_id <- sapply(strsplit(colnames(DESeq_macrophage), "_"), function(x) tail(x, 1))
+
+# For Treg samples
+colnames(gsva_res_treg) <- tolower(colnames(gsva_res_treg))
+colnames(gsva_res_treg) <- gsub("[^a-z0-9_]", "", colnames(gsva_res_treg))
+colnames(gsva_res_treg) <- gsub(" ", "_", colnames(gsva_res_treg))
+colnames(gsva_res_treg) <- sapply(strsplit(colnames(gsva_res_treg), "_"), function(x) tail(x, 1))
+
+colnames(DESeq_treg) <- tolower(colnames(DESeq_treg))
+colnames(DESeq_treg) <- gsub("[^a-z0-9_]", "", colnames(DESeq_treg))
+colData(DESeq_treg)$sample_id <- sapply(strsplit(colnames(DESeq_treg), "_"), function(x) tail(x, 1))
+
+# Find common samples among both datasets and DESeq sample IDs
+common_samples <- Reduce(intersect, list(
+  colnames(gsva_res_macrophage),
+  colnames(gsva_res_treg),
+  colData(DESeq_macrophage)$sample_id,
+  colData(DESeq_treg)$sample_id
+))
+
+# Subset the GSVA results to include only common samples
+gsva_res_macrophage_sub <- gsva_res_macrophage[, common_samples]
+gsva_res_treg_sub <- gsva_res_treg[, common_samples]
+
+# Step 2: Select Top 20 Pathways Enriched in Each Cell Type
+
+# Get sample IDs for dominant groups
+moc_samples <- colData(DESeq_macrophage)$sample_id[colData(DESeq_macrophage)$group.id == "MφOC"]
+moc_samples <- intersect(moc_samples, common_samples)
+
+tregtex_samples <- colData(DESeq_treg)$sample_id[colData(DESeq_treg)$group.id == "TregTex"]
+tregtex_samples <- intersect(tregtex_samples, common_samples)
+
+# Compute mean GSVA scores for each pathway
+mean_gsva_macrophage <- rowMeans(gsva_res_macrophage[, moc_samples, drop = FALSE], na.rm = TRUE)
+mean_gsva_treg <- rowMeans(gsva_res_treg[, tregtex_samples, drop = FALSE], na.rm = TRUE)
+
+# Select top 20 pathways for each cell type
+top20_macrophage <- names(sort(mean_gsva_macrophage, decreasing = TRUE))[1:10]
+top20_treg <- names(sort(mean_gsva_treg, decreasing = TRUE))[1:10]
+
+# Combine pathways
+gene_set_names <- unique(c(top20_macrophage, top20_treg))
+
+# Subset GSVA results for selected pathways and common samples
+gsva_res_macrophage_sub <- gsva_res_macrophage[gene_set_names, common_samples]
+gsva_res_treg_sub <- gsva_res_treg[gene_set_names, common_samples]
+
+# Combine GSVA results into one matrix
+gsva_res_combined <- rbind(
+  gsva_res_macrophage_sub[top20_macrophage, ],
+  gsva_res_treg_sub[top20_treg, ]
+)
+
+# Create pathway_cell_type vector
+pathway_cell_type <- c(rep("Macrophage", length(top20_macrophage)), rep("Treg", length(top20_treg)))
+
+# Step 3: Create Sample Annotations
+# For common samples
+sample_annotation <- data.frame(
+  group.id = colData(DESeq_macrophage)$group.id[match(common_samples, colData(DESeq_macrophage)$sample_id)],
+  stringsAsFactors = FALSE
+)
+rownames(sample_annotation) <- common_samples
+
+# Define colors for group.id
+group_levels <- unique(sample_annotation$group.id)
+group_colors <- setNames(
+  colorRampPalette(brewer.pal(8, "Set1"))(length(group_levels)),
+  group_levels
+)
+
+# Create HeatmapAnnotation
+ha <- HeatmapAnnotation(
+  df = sample_annotation,
+  col = list(group.id = group_colors),
+  annotation_legend_param = list(group.id = list(title = "Group ID"))
+)
+
+# Define color function based on data range
+min_score <- min(gsva_res_combined, na.rm = TRUE)
+max_score <- max(gsva_res_combined, na.rm = TRUE)
+color_fun <- colorRamp2(c(min_score, 0, max_score), c("blue", "white", "red"))
+
+# Step 4: Plot the Heatmap
+heatmap <- Heatmap(
+  gsva_res_combined,
+  name = "GSVA Score",
+  top_annotation = ha,
+  show_column_names = FALSE,
+  cluster_columns = TRUE,
+  cluster_rows = TRUE,
+  column_title = "Samples",
+  row_title = "Pathways",
+  col = color_fun,
+  row_names_gp = gpar(fontsize = 8),
+  row_split = pathway_cell_type,  # Split rows by cell type
+  cluster_column_slices = FALSE,  # Cluster columns globally
+  cluster_row_slices = FALSE,     # Cluster rows within each cell type
+  row_gap = unit(2, "mm")
+)
+
+# Draw the heatmap
+draw(heatmap)
+
+```
+```{r}
+# Load necessary libraries
+library(ComplexHeatmap)
+library(circlize)
+library(RColorBrewer)
+
+# Step 1: Load and Prepare Data
+# Load your GSVA results for both cell types
+gsva_res_macrophage <- readRDS("~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_oc/gsva_res.C5_immune_bone.rds")
+gsva_res_treg <- readRDS("~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_tex/gsva_res.C5_immune_bone.rds")
+# Load DESeq datasets for both cell types
+DESeq_macrophage <- readRDS("~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_oc/DESeq.rds")
+DESeq_treg <- readRDS("~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_tex/DESeq.rds")
+
+# Process sample names to extract sample IDs
+# For macrophage samples
+colnames(gsva_res_macrophage) <- tolower(colnames(gsva_res_macrophage))
+colnames(gsva_res_macrophage) <- gsub("[^a-z0-9_]", "", colnames(gsva_res_macrophage))
+colnames(gsva_res_macrophage) <- sapply(strsplit(colnames(gsva_res_macrophage), "_"), function(x) tail(x, 1))
+
+colnames(DESeq_macrophage) <- tolower(colnames(DESeq_macrophage))
+colnames(DESeq_macrophage) <- gsub("[^a-z0-9_]", "", colnames(DESeq_macrophage))
+colData(DESeq_macrophage)$sample_id <- sapply(strsplit(colnames(DESeq_macrophage), "_"), function(x) tail(x, 1))
+
+# For Treg samples
+colnames(gsva_res_treg) <- tolower(colnames(gsva_res_treg))
+colnames(gsva_res_treg) <- gsub("[^a-z0-9_]", "", colnames(gsva_res_treg))
+colnames(gsva_res_treg) <- gsub(" ", "_", colnames(gsva_res_treg))
+colnames(gsva_res_treg) <- sapply(strsplit(colnames(gsva_res_treg), "_"), function(x) tail(x, 1))
+
+colnames(DESeq_treg) <- tolower(colnames(DESeq_treg))
+colnames(DESeq_treg) <- gsub("[^a-z0-9_]", "", colnames(DESeq_treg))
+colData(DESeq_treg)$sample_id <- sapply(strsplit(colnames(DESeq_treg), "_"), function(x) tail(x, 1))
+
+# Find common samples among both datasets and DESeq sample IDs
+common_samples <- Reduce(intersect, list(
+  colnames(gsva_res_macrophage),
+  colnames(gsva_res_treg),
+  colData(DESeq_macrophage)$sample_id,
+  colData(DESeq_treg)$sample_id
+))
+
+# Subset the GSVA results to include only common samples
+gsva_res_macrophage_sub <- gsva_res_macrophage[, common_samples]
+gsva_res_treg_sub <- gsva_res_treg[, common_samples]
+
+# Step 2: Select Top 20 Pathways Enriched in Each Cell Type
+
+# Get sample IDs for dominant groups
+moc_samples <- colData(DESeq_macrophage)$sample_id[colData(DESeq_macrophage)$group.id == "MφOC"]
+moc_samples <- intersect(moc_samples, common_samples)
+
+tregtex_samples <- colData(DESeq_treg)$sample_id[colData(DESeq_treg)$group.id == "TregTex"]
+tregtex_samples <- intersect(tregtex_samples, common_samples)
+
+# Compute mean GSVA scores for each pathway
+mean_gsva_macrophage <- rowMeans(gsva_res_macrophage[, moc_samples, drop = FALSE], na.rm = TRUE)
+mean_gsva_treg <- rowMeans(gsva_res_treg[, tregtex_samples, drop = FALSE], na.rm = TRUE)
+
+# Select top 20 pathways for each cell type
+top20_macrophage <- names(sort(mean_gsva_macrophage, decreasing = TRUE))[1:30]
+top20_treg <- names(sort(mean_gsva_treg, decreasing = TRUE))[1:30]
+
+# Combine pathways
+gene_set_names <- unique(c(top20_macrophage, top20_treg))
+
+# Subset GSVA results for selected pathways and common samples
+gsva_res_macrophage_sub <- gsva_res_macrophage[gene_set_names, common_samples]
+gsva_res_treg_sub <- gsva_res_treg[gene_set_names, common_samples]
+
+# Combine GSVA results into one matrix
+gsva_res_combined <- rbind(
+  gsva_res_macrophage_sub[top20_macrophage, ],
+  gsva_res_treg_sub[top20_treg, ]
+)
+
+# Create pathway_cell_type vector
+pathway_cell_type <- c(rep("Macrophage", length(top20_macrophage)), rep("Treg", length(top20_treg)))
+
+# Step 3: Create Sample Annotations
+# For common samples
+sample_annotation <- data.frame(
+  group.id = colData(DESeq_macrophage)$group.id[match(common_samples, colData(DESeq_macrophage)$sample_id)],
+  stringsAsFactors = FALSE
+)
+rownames(sample_annotation) <- common_samples
+
+# Define colors for group.id
+group_levels <- unique(sample_annotation$group.id)
+group_colors <- setNames(
+  colorRampPalette(brewer.pal(8, "Set1"))(length(group_levels)),
+  group_levels
+)
+
+# Create HeatmapAnnotation
+ha <- HeatmapAnnotation(
+  df = sample_annotation,
+  col = list(group.id = group_colors),
+  annotation_legend_param = list(group.id = list(title = "Group ID"))
+)
+
+# Define color function based on data range
+min_score <- min(gsva_res_combined, na.rm = TRUE)
+max_score <- max(gsva_res_combined, na.rm = TRUE)
+color_fun <- colorRamp2(c(min_score, 0, max_score), c("blue", "white", "red"))
+
+# Step 4: Plot the Heatmap
+heatmap <- Heatmap(
+  gsva_res_combined,
+  name = "GSVA Score",
+  top_annotation = ha,
+  show_column_names = TRUE,
+  cluster_columns = TRUE,
+  cluster_rows = TRUE,
+  column_title = "Samples",
+  row_title = "Pathways",
+  col = color_fun,
+  row_names_gp = gpar(fontsize = 8),
+  row_split = pathway_cell_type,  # Split rows by cell type
+  cluster_column_slices = FALSE,  # Cluster columns globally
+  cluster_row_slices = FALSE
+)
+
+# Draw the heatmap
+draw(heatmap)
+
+```
+
+
+```{r}
+# Load necessary libraries
+library(ComplexHeatmap)
+library(circlize)
+library(RColorBrewer)
+
+# Step 1: Load and Prepare Data
+# Load your GSVA results for both cell types
+gsva_res_mono <- readRDS("~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_mono/gsva_res.C5_immune_bone.rds")
+gsva_res_macrophage <- readRDS("~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_macs/gsva_res.C5_immune_bone.rds")
+gsva_res_treg <- readRDS("~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_treg/gsva_res.C5_immune_bone.rds")
+
+
+# Load DESeq datasets for both cell types
+DESeq_mono <- readRDS("~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_mono/DESeq.rds")
+DESeq_macrophage <- readRDS("~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_macs/DESeq.rds")
+DESeq_treg <- readRDS("~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_treg/DESeq.rds")
+
+
+
+# Process sample names to extract sample IDs
+# For mono samples
+colnames(gsva_res_mono) <- tolower(colnames(gsva_res_mono))
+colnames(gsva_res_mono) <- gsub("[^a-z0-9_]", "", colnames(gsva_res_mono))
+colnames(gsva_res_mono) <- sapply(strsplit(colnames(gsva_res_mono), "_"), function(x) tail(x, 1))
+
+colnames(DESeq_mono) <- tolower(colnames(DESeq_mono))
+colnames(DESeq_mono) <- gsub("[^a-z0-9_]", "", colnames(DESeq_mono))
+colData(DESeq_mono)$sample_id <- sapply(strsplit(colnames(DESeq_mono), "_"), function(x) tail(x, 1))
+
+# For macrophage samples
+colnames(gsva_res_macrophage) <- tolower(colnames(gsva_res_macrophage))
+colnames(gsva_res_macrophage) <- gsub("[^a-z0-9_]", "", colnames(gsva_res_macrophage))
+colnames(gsva_res_macrophage) <- sapply(strsplit(colnames(gsva_res_macrophage), "_"), function(x) tail(x, 1))
+
+colnames(DESeq_macrophage) <- tolower(colnames(DESeq_macrophage))
+colnames(DESeq_macrophage) <- gsub("[^a-z0-9_]", "", colnames(DESeq_macrophage))
+colData(DESeq_macrophage)$sample_id <- sapply(strsplit(colnames(DESeq_macrophage), "_"), function(x) tail(x, 1))
+
+# For Treg samples
+colnames(gsva_res_treg) <- tolower(colnames(gsva_res_treg))
+colnames(gsva_res_treg) <- gsub("[^a-z0-9_]", "", colnames(gsva_res_treg))
+colnames(gsva_res_treg) <- gsub(" ", "_", colnames(gsva_res_treg))
+colnames(gsva_res_treg) <- sapply(strsplit(colnames(gsva_res_treg), "_"), function(x) tail(x, 1))
+
+colnames(DESeq_treg) <- tolower(colnames(DESeq_treg))
+colnames(DESeq_treg) <- gsub("[^a-z0-9_]", "", colnames(DESeq_treg))
+colData(DESeq_treg)$sample_id <- sapply(strsplit(colnames(DESeq_treg), "_"), function(x) tail(x, 1))
+
+# Find common samples among both datasets and DESeq sample IDs
+common_samples <- Reduce(intersect, list(
+  colnames(gsva_res_mono),
+  colnames(gsva_res_macrophage),
+  colnames(gsva_res_treg),
+  
+  colData(DESeq_mono)$sample_id,
+  colData(DESeq_macrophage)$sample_id,
+  colData(DESeq_treg)$sample_id
+))
+
+# Subset the GSVA results to include only common samples
+gsva_res_mono_sub <- gsva_res_mono[, common_samples]
+gsva_res_macrophage_sub <- gsva_res_macrophage[, common_samples]
+gsva_res_treg_sub <- gsva_res_treg[, common_samples]
+
+# Step 2: Select Top 20 Pathways Enriched in Each Cell Type
+
+# Get sample IDs for dominant groups
+mon_samples <- colData(DESeq_mono)$sample_id[colData(DESeq_mono)$group.id == "Mono"]
+mon_samples <- intersect(mon_samples, common_samples)
+
+moc_samples <- colData(DESeq_macrophage)$sample_id[colData(DESeq_macrophage)$group.id == "MφOC"]
+moc_samples <- intersect(moc_samples, common_samples)
+
+tregtex_samples <- colData(DESeq_treg)$sample_id[colData(DESeq_treg)$group.id == "TregTex"]
+tregtex_samples <- intersect(tregtex_samples, common_samples)
+
+# Compute mean GSVA scores for each pathway
+mean_gsva_mono <- rowMeans(gsva_res_mono[, mon_samples, drop = FALSE], na.rm = TRUE)
+mean_gsva_macrophage <- rowMeans(gsva_res_macrophage[, moc_samples, drop = FALSE], na.rm = TRUE)
+mean_gsva_treg <- rowMeans(gsva_res_treg[, tregtex_samples, drop = FALSE], na.rm = TRUE)
+
+# Select top 20 pathways for each cell type
+
+top20_mono <- names(sort(mean_gsva_mono, decreasing = TRUE))[1:30]
+top20_macrophage <- names(sort(mean_gsva_macrophage, decreasing = TRUE))[1:30]
+top20_treg <- names(sort(mean_gsva_treg, decreasing = TRUE))[1:30]
+
+# Combine pathways
+gene_set_names <- unique(c(top20_mono, top20_macrophage, top20_treg))
+
+# Subset GSVA results for selected pathways and common samples
+gsva_res_mono_sub <- gsva_res_mono[gene_set_names, common_samples]
+gsva_res_macrophage_sub <- gsva_res_macrophage[gene_set_names, common_samples]
+gsva_res_treg_sub <- gsva_res_treg[gene_set_names, common_samples]
+
+# Combine GSVA results into one matrix
+gsva_res_combined <- rbind(
+  gsva_res_mono_sub[top20_mono, ],
+  gsva_res_macrophage_sub[top20_macrophage, ],
+  gsva_res_treg_sub[top20_treg, ]
+)
+
+# Create pathway_cell_type vector
+pathway_cell_type <- c(rep("Monocyte", length(top20_mono)), rep("Macrophage", length(top20_macrophage)), rep("Treg", length(top20_treg)))
+
+# Step 3: Create Sample Annotations
+# For common samples
+sample_annotation <- data.frame(
+  group.id = colData(DESeq_macrophage)$group.id[match(common_samples, colData(DESeq_macrophage)$sample_id)],
+  stringsAsFactors = FALSE
+)
+rownames(sample_annotation) <- common_samples
+
+# Define colors for group.id
+group_levels <- unique(sample_annotation$group.id)
+group_colors <- setNames(
+  colorRampPalette(brewer.pal(8, "Set1"))(length(group_levels)),
+  group_levels
+)
+
+# Create HeatmapAnnotation
+ha <- HeatmapAnnotation(
+  df = sample_annotation,
+  col = list(group.id = group_colors),
+  annotation_legend_param = list(group.id = list(title = "Group ID"))
+)
+
+# Define color function based on data range
+min_score <- min(gsva_res_combined, na.rm = TRUE)
+max_score <- max(gsva_res_combined, na.rm = TRUE)
+color_fun <- colorRamp2(c(min_score, 0, max_score), c("blue", "white", "red"))
+
+# Step 4: Plot the Heatmap
+heatmap <- Heatmap(
+  gsva_res_combined,
+  name = "GSVA Score",
+  top_annotation = ha,
+  show_column_names = T,
+  cluster_columns = TRUE,
+  cluster_rows = TRUE,
+  column_title = "Samples",
+  row_title = "Pathways",
+  col = color_fun,
+  row_names_gp = gpar(fontsize = 8),
+  row_split = pathway_cell_type,  # Split rows by cell type
+  cluster_column_slices = FALSE,  # Cluster columns globally
+  cluster_row_slices = FALSE,     # Cluster rows within each cell type
+  row_gap = unit(2, "mm")
+)
+
+# Draw the heatmap
+draw(heatmap)
+
+```
+
+
+
+
+```{r}
+# Load necessary libraries
+library(ComplexHeatmap)
+library(circlize)
+library(RColorBrewer)
+
+# Step 1: Load and Prepare Data
+# Load your GSVA results for all cell types
+gsva_res_mono <- readRDS("~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_mono/gsva_res.C5_immune_bone.rds")
+gsva_res_macrophage <- readRDS("~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_macs/gsva_res.C5_immune_bone.rds")
+gsva_res_treg <- readRDS("~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_treg/gsva_res.C5_immune_bone.rds")
+
+# Load DESeq datasets for all cell types
+DESeq_mono <- readRDS("~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_mono/DESeq.rds")
+DESeq_macrophage <- readRDS("~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_macs/DESeq.rds")
+DESeq_treg <- readRDS("~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_treg/DESeq.rds")
+
+# Process sample names to extract sample IDs
+process_sample_names <- function(gsva_res, DESeq_obj) {
+  colnames(gsva_res) <- tolower(colnames(gsva_res))
+  colnames(gsva_res) <- gsub("[^a-z0-9_]", "", colnames(gsva_res))
+  colnames(gsva_res) <- sapply(strsplit(colnames(gsva_res), "_"), function(x) tail(x, 1))
+  
+  colnames(DESeq_obj) <- tolower(colnames(DESeq_obj))
+  colnames(DESeq_obj) <- gsub("[^a-z0-9_]", "", colnames(DESeq_obj))
+  colData(DESeq_obj)$sample_id <- sapply(strsplit(colnames(DESeq_obj), "_"), function(x) tail(x, 1))
+  
+  list(gsva_res = gsva_res, DESeq_obj = DESeq_obj)
+}
+
+# Process samples for each cell type
+processed_mono <- process_sample_names(gsva_res_mono, DESeq_mono)
+gsva_res_mono <- processed_mono$gsva_res
+DESeq_mono <- processed_mono$DESeq_obj
+
+processed_macrophage <- process_sample_names(gsva_res_macrophage, DESeq_macrophage)
+gsva_res_macrophage <- processed_macrophage$gsva_res
+DESeq_macrophage <- processed_macrophage$DESeq_obj
+
+processed_treg <- process_sample_names(gsva_res_treg, DESeq_treg)
+gsva_res_treg <- processed_treg$gsva_res
+DESeq_treg <- processed_treg$DESeq_obj
+
+# Find common samples among all datasets and DESeq sample IDs
+common_samples <- Reduce(intersect, list(
+  colnames(gsva_res_mono),
+  colnames(gsva_res_macrophage),
+  colnames(gsva_res_treg),
+  colData(DESeq_mono)$sample_id,
+  colData(DESeq_macrophage)$sample_id,
+  colData(DESeq_treg)$sample_id
+))
+
+# Subset the GSVA results to include only common samples
+gsva_res_mono <- gsva_res_mono[, common_samples]
+gsva_res_macrophage <- gsva_res_macrophage[, common_samples]
+gsva_res_treg <- gsva_res_treg[, common_samples]
+
+# Step 2: Select Top 30 Pathways Enriched in Each Cell Type
+
+# Get sample IDs for dominant groups
+mon_samples <- colData(DESeq_mono)$sample_id[colData(DESeq_mono)$group.id == "Mono"]
+mon_samples <- intersect(mon_samples, common_samples)
+
+moc_samples <- colData(DESeq_macrophage)$sample_id[colData(DESeq_macrophage)$group.id == "MφOC"]
+moc_samples <- intersect(moc_samples, common_samples)
+
+tregtex_samples <- colData(DESeq_treg)$sample_id[colData(DESeq_treg)$group.id == "TregTex"]
+tregtex_samples <- intersect(tregtex_samples, common_samples)
+
+# Compute mean GSVA scores for each pathway
+mean_gsva_mono <- rowMeans(gsva_res_mono[, mon_samples, drop = FALSE], na.rm = TRUE)
+mean_gsva_macrophage <- rowMeans(gsva_res_macrophage[, moc_samples, drop = FALSE], na.rm = TRUE)
+mean_gsva_treg <- rowMeans(gsva_res_treg[, tregtex_samples, drop = FALSE], na.rm = TRUE)
+
+# Select top 30 pathways for each cell type
+top30_mono <- names(sort(mean_gsva_mono, decreasing = TRUE))[1:30]
+top30_macrophage <- names(sort(mean_gsva_macrophage, decreasing = TRUE))[1:30]
+top30_treg <- names(sort(mean_gsva_treg, decreasing = TRUE))[1:30]
+
+# Combine pathways
+gene_set_names <- unique(c(top30_mono, top30_macrophage, top30_treg))
+
+# **Adjust code to prevent subsetting error**
+# Subset gene_set_names to those present in each gsva_res object
+gene_set_names_mono <- intersect(gene_set_names, rownames(gsva_res_mono))
+gene_set_names_macrophage <- intersect(gene_set_names, rownames(gsva_res_macrophage))
+gene_set_names_treg <- intersect(gene_set_names, rownames(gsva_res_treg))
+
+# Subset GSVA results for selected pathways and common samples
+gsva_res_mono_sub <- gsva_res_mono[gene_set_names_mono, common_samples]
+gsva_res_macrophage_sub <- gsva_res_macrophage[gene_set_names_macrophage, common_samples]
+gsva_res_treg_sub <- gsva_res_treg[gene_set_names_treg, common_samples]
+
+# Combine GSVA results into one matrix
+gsva_res_combined <- rbind(
+  gsva_res_mono_sub,
+  gsva_res_macrophage_sub,
+  gsva_res_treg_sub
+)
+
+# Create pathway_cell_type vector
+pathway_cell_type <- c(
+  rep("Monocyte", nrow(gsva_res_mono_sub)),
+  rep("Macrophage", nrow(gsva_res_macrophage_sub)),
+  rep("Treg", nrow(gsva_res_treg_sub))
+)
+
+# Step 3: Create Sample Annotations
+# For common samples
+sample_annotation <- data.frame(
+  group.id = colData(DESeq_macrophage)$group.id[match(common_samples, colData(DESeq_macrophage)$sample_id)],
+  stringsAsFactors = FALSE
+)
+rownames(sample_annotation) <- common_samples
+
+# Define colors for group.id
+group_levels <- unique(sample_annotation$group.id)
+group_colors <- setNames(
+  colorRampPalette(brewer.pal(8, "Set1"))(length(group_levels)),
+  group_levels
+)
+
+# Create HeatmapAnnotation
+ha <- HeatmapAnnotation(
+  df = sample_annotation,
+  col = list(group.id = group_colors),
+  annotation_legend_param = list(group.id = list(title = "Group ID"))
+)
+
+# Define color function based on data range
+min_score <- min(gsva_res_combined, na.rm = TRUE)
+max_score <- max(gsva_res_combined, na.rm = TRUE)
+color_fun <- colorRamp2(c(min_score, 0, max_score), c("blue", "white", "red"))
+
+# Step 4: Plot the Heatmap
+heatmap <- Heatmap(
+  gsva_res_combined,
+  name = "GSVA Score",
+  top_annotation = ha,
+  show_column_names = TRUE,
+  cluster_columns = TRUE,
+  cluster_rows = TRUE,
+  column_title = "Samples",
+  row_title = "Pathways",
+  col = color_fun,
+  row_names_gp = gpar(fontsize = 8),
+  row_split = pathway_cell_type,  # Split rows by cell type
+  cluster_column_slices = FALSE,  # Cluster columns globally
+  cluster_row_slices = FALSE,     # Cluster rows within each cell type
+  row_gap = unit(2, "mm")
+)
+
+# Draw the heatmap
+draw(heatmap)
+
+```
+
+```{r}
+# Load necessary libraries
+library(ComplexHeatmap)
+library(circlize)
+library(RColorBrewer)
+
+# Step 1: Define Cell Types and Their Dominant Groups
+cell_types <- c("Monocyte", "Macrophage", "Treg", "OC", "Tex")
+dominant_groups <- c("Mono", "MφOC", "TregTex", "OC", "Tex")
+
+# Step 2: Specify File Paths for GSVA and DESeq Results
+gsva_files <- list(
+    "Monocyte" = "~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_mono/gsva_res.C5_immune_bone.rds",
+    "Macrophage" = "~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_macs//gsva_res.C5_immune_bone.rds",
+    "Treg" = "~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_tex/gsva_res.C5_immune_bone.rds",
+    "OC" = "~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_oc/gsva_res.C5_immune_bone.rds",
+    "Tex" = "~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_tex/gsva_res.C5_immune_bone.rds"
+)
+
+deseq_files <- list(
+    "Monocyte" = "~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_mono/DESeq.rds",
+    "Macrophage" = "~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_macs/DESeq.rds",
+    "Treg" = "~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_tex/DESeq.rds",
+    "OC" = "~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_oc/DESeq.rds",
+    "Tex" = "~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_tex/DESeq.rds"
+)
+
+# Step 3: Initialize Lists
+gsva_results <- list()
+deseq_data <- list()
+
+# Helper Function: Clean and Extract Sample IDs
+extract_sample_id <- function(colnames_vector) {
+    cleaned_names <- tolower(colnames_vector)
+    cleaned_names <- gsub("[^a-z0-9_]", "", cleaned_names)
+    sample_ids <- sapply(strsplit(cleaned_names, "_"), function(x) tail(x, 1))
+    return(sample_ids)
+}
+
+# Step 4: Load Data
+for (i in seq_along(cell_types)) {
+    cell_type <- cell_types[i]
+    gsva_file <- gsva_files[[cell_type]]
+    deseq_file <- deseq_files[[cell_type]]
+
+    if (file.exists(gsva_file)) {
+        gsva_res <- readRDS(gsva_file)
+        colnames(gsva_res) <- extract_sample_id(colnames(gsva_res))
+        gsva_results[[cell_type]] <- gsva_res
+    }
+
+    if (file.exists(deseq_file)) {
+        deseq_res <- readRDS(deseq_file)
+        colnames(deseq_res) <- extract_sample_id(colnames(deseq_res))
+        colData(deseq_res)$sample_id <- extract_sample_id(colnames(deseq_res))
+        deseq_data[[cell_type]] <- deseq_res
+    }
+}
+
+# Step 5: Identify Common Samples
+common_samples <- Reduce(intersect, c(
+    lapply(gsva_results, colnames),
+    lapply(deseq_data, function(x) colData(x)$sample_id)
+))
+
+# Step 6: Exclude "ctrl" Samples
+sample_group_ids <- data.frame(sample_id = common_samples, group.id = NA, stringsAsFactors = FALSE)
+
+for (cell_type in cell_types) {
+    if (cell_type %in% names(deseq_data)) {
+        deseq_sub <- deseq_data[[cell_type]]
+        group_id <- deseq_sub$group.id
+        names(group_id) <- deseq_sub$sample_id
+        samples_in_type <- intersect(names(group_id), sample_group_ids$sample_id)
+        sample_group_ids$group.id[sample_group_ids$sample_id %in% samples_in_type] <- group_id[samples_in_type]
+    }
+}
+
+non_ctrl_samples <- sample_group_ids$sample_id[sample_group_ids$group.id != "ctrl" & !is.na(sample_group_ids$group.id)]
+gsva_res_final <- lapply(gsva_results, function(x) x[, non_ctrl_samples, drop = FALSE])
+
+# Step 7: Select Top Pathways
+gsva_top_pathways <- list()
+pathway_cell_type <- c()
+
+for (i in seq_along(cell_types)) {
+    cell_type <- cell_types[i]
+    if (cell_type %in% names(gsva_res_final)) {
+        gsva_res_current <- gsva_res_final[[cell_type]]
+        mean_gsva <- rowMeans(gsva_res_current, na.rm = TRUE)
+        top_pathways <- names(sort(mean_gsva, decreasing = TRUE))[1:10]
+        gsva_top_pathways[[cell_type]] <- gsva_res_current[top_pathways, , drop = FALSE]
+        pathway_cell_type <- c(pathway_cell_type, rep(cell_type, length(top_pathways)))
+    }
+}
+
+gsva_res_combined <- do.call(rbind, gsva_top_pathways)
+
+# Ensure Unique Row Names
+rownames(gsva_res_combined) <- make.unique(rownames(gsva_res_combined))
+
+# Step 8: Create Annotations
+pathways_df <- data.frame(
+    pathway = rownames(gsva_res_combined),
+    cell_type = factor(pathway_cell_type, levels = cell_types),
+    stringsAsFactors = FALSE
+)
+
+sample_annotation <- data.frame(
+    group.id = sample_group_ids$group.id[match(colnames(gsva_res_combined), sample_group_ids$sample_id)],
+    stringsAsFactors = FALSE
+)
+rownames(sample_annotation) <- colnames(gsva_res_combined)
+
+group_colors <- setNames(
+    brewer.pal(min(8, length(unique(sample_annotation$group.id))), "Set1"),
+    unique(sample_annotation$group.id)
+)
+
+cell_type_colors <- setNames(
+    brewer.pal(min(8, length(unique(pathways_df$cell_type))), "Set2"),
+    unique(pathways_df$cell_type)
+)
+
+# Step 9: Generate Heatmap
+ha <- HeatmapAnnotation(
+    df = sample_annotation,
+    col = list(group.id = group_colors),
+    annotation_legend_param = list(group.id = list(title = "Group ID"))
+)
+
+
+heatmap <- Heatmap(
+    gsva_res_combined,
+    name = "GSVA Score",
+    top_annotation = ha,
+    row_title = "Pathways",
+    column_title = "Samples",
+    col = colorRamp2(c(min(gsva_res_combined), 0, max(gsva_res_combined)), c("blue", "white", "red")),
+    row_split = pathways_df$cell_type
+)
+
+# Draw the Heatmap
+draw(heatmap)
+
+```
+
+
+```{r}
+# Load necessary libraries
+library(ComplexHeatmap)
+library(circlize)
+library(RColorBrewer)
+
+# Step 1: Define Cell Types and Their Dominant Groups
+cell_types <- c("Monocyte", "Macrophage", "Treg", "OC", "Tex")
+dominant_groups <- c("Mono", "MφOC", "TregTex", "MφOC", "TregTex")  # Corrected mapping
+
+# Create a named vector for easy mapping
+group_mapping <- setNames(dominant_groups, cell_types)
+
+# Step 2: Specify File Paths for GSVA and DESeq Results
+gsva_files <- list(
+    "Monocyte" = "~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_mono/gsva_res.C5_immune_bone.rds",
+    "Macrophage" = "~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_macs/gsva_res.C5_immune_bone.rds",
+    "Treg" = "~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_tex/gsva_res.C5_immune_bone.rds",
+    "OC" = "~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_oc/gsva_res.C5_immune_bone.rds",
+    "Tex" = "~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_tex/gsva_res.C5_immune_bone.rds"
+)
+
+deseq_files <- list(
+    "Monocyte" = "~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_mono/DESeq.rds",
+    "Macrophage" = "~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_macs/DESeq.rds",
+    "Treg" = "~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_tex/DESeq.rds",
+    "OC" = "~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_oc/DESeq.rds",
+    "Tex" = "~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_tex/DESeq.rds"
+)
+
+# Step 3: Initialize Lists
+gsva_results <- list()
+deseq_data <- list()
+
+# Helper Function: Clean and Extract Sample IDs
+extract_sample_id <- function(colnames_vector) {
+    # Modify this function based on the actual sample naming convention
+    cleaned_names <- tolower(colnames_vector)
+    cleaned_names <- gsub("[^a-z0-9_]", "", cleaned_names)
+    sample_ids <- sapply(strsplit(cleaned_names, "_"), function(x) tail(x, 1))
+    return(sample_ids)
+}
+
+# Step 4: Load Data with Debugging
+for (i in seq_along(cell_types)) {
+    cell_type <- cell_types[i]
+    gsva_file <- gsva_files[[cell_type]]
+    deseq_file <- deseq_files[[cell_type]]
+    
+    cat("Processing Cell Type:", cell_type, "\n")
+    
+    # Load GSVA data
+    if (file.exists(gsva_file)) {
+        gsva_res <- readRDS(gsva_file)
+        original_colnames <- colnames(gsva_res)
+        extracted_sample_ids <- extract_sample_id(original_colnames)
+        
+        # Debugging: Print sample names before and after extraction
+        cat("GSVA Data - Original Sample Names:\n")
+        print(head(original_colnames))
+        cat("GSVA Data - Extracted Sample IDs:\n")
+        print(head(extracted_sample_ids))
+        
+        # Assign extracted sample IDs
+        colnames(gsva_res) <- extracted_sample_ids
+        gsva_results[[cell_type]] <- gsva_res
+    } else {
+        warning(paste("GSVA file not found for cell type:", cell_type))
+    }
+    
+    # Load DESeq data
+    if (file.exists(deseq_file)) {
+        deseq_res <- readRDS(deseq_file)
+        original_colnames <- colnames(deseq_res)
+        extracted_sample_ids <- extract_sample_id(original_colnames)
+        
+        # Debugging: Print sample names before and after extraction
+        cat("DESeq Data - Original Sample Names:\n")
+        print(head(original_colnames))
+        cat("DESeq Data - Extracted Sample IDs:\n")
+        print(head(extracted_sample_ids))
+        
+        # Assign extracted sample IDs
+        colnames(deseq_res) <- extracted_sample_ids
+        colData(deseq_res)$sample_id <- extracted_sample_ids
+        deseq_data[[cell_type]] <- deseq_res
+    } else {
+        warning(paste("DESeq file not found for cell type:", cell_type))
+    }
+    
+    cat("\n")  # Add a newline for readability
+}
+
+# Step 5: Identify Common Samples
+common_samples <- Reduce(intersect, c(
+    lapply(gsva_results, colnames),
+    lapply(deseq_data, function(x) as.character(colData(x)$sample_id))  # Ensure sample_id is character
+))
+
+cat("Common Samples:\n")
+print(common_samples)
+
+if (length(common_samples) == 0) {
+    stop("No common samples found across all cell types.")
+}
+
+# Step 6: Exclude "ctrl" Samples and Assign Cell Types
+# Initialize a data frame with sample_id, group.id, and cell_type
+sample_group_ids <- data.frame(sample_id = common_samples, group.id = NA, cell_type = NA, stringsAsFactors = FALSE)
+
+for (cell_type in cell_types) {
+    if (cell_type %in% names(deseq_data)) {
+        deseq_sub <- deseq_data[[cell_type]]
+        group_id <- as.character(deseq_sub$group.id)  # Convert to character to prevent factor issues
+        names(group_id) <- deseq_sub$sample_id
+        
+        # Debugging: Print group_id assignments
+        cat("DESeq Data - Cell Type:", cell_type, "\n")
+        cat("Group ID Assignments:\n")
+        print(head(group_id))
+        
+        samples_in_type <- intersect(names(group_id), sample_group_ids$sample_id)
+        sample_group_ids$group.id[sample_group_ids$sample_id %in% samples_in_type] <- group_id[samples_in_type]
+        sample_group_ids$cell_type[sample_group_ids$sample_id %in% samples_in_type] <- cell_type
+    }
+}
+
+# Debugging: Inspect sample_group_ids
+cat("Sample Group Assignments:\n")
+print(head(sample_group_ids))
+cat("Sample Group Distribution:\n")
+print(table(sample_group_ids$cell_type, sample_group_ids$group.id))
+
+# Identify non-control samples
+non_ctrl_samples <- sample_group_ids$sample_id[sample_group_ids$group.id != "ctrl" & !is.na(sample_group_ids$group.id)]
+
+cat("Non-Control Samples:\n")
+print(non_ctrl_samples)
+
+if (length(non_ctrl_samples) == 0) {
+    stop("No non-control samples found.")
+}
+
+# Subset GSVA results to include only non-control samples
+gsva_res_final <- lapply(gsva_results, function(x) x[, non_ctrl_samples, drop = FALSE])
+
+# Step 7: Select Top Pathways Based on Group-Specific Rankings (Common Pathways)
+gsva_top_pathways <- list()
+pathway_cell_type <- c()
+
+# Identify common pathways across all cell types
+common_pathways <- Reduce(intersect, lapply(gsva_res_final, rownames))
+
+cat("Number of Common Pathways:", length(common_pathways), "\n")
+
+if (length(common_pathways) == 0) {
+    stop("No common pathways found across all cell types.")
+}
+
+# Initialize a matrix to store mean GSVA scores per cell type for common pathways
+mean_gsva_matrix <- matrix(NA, nrow = length(common_pathways), ncol = length(cell_types))
+rownames(mean_gsva_matrix) <- common_pathways
+colnames(mean_gsva_matrix) <- cell_types
+
+# Calculate mean GSVA scores for each cell type within its dominant group
+for (cell_type in cell_types) {
+    if (cell_type %in% names(gsva_res_final)) {
+        gsva_res_current <- gsva_res_final[[cell_type]]
+        
+        # Get the dominant group for the current cell type
+        dominant_group <- group_mapping[cell_type]
+        
+        # Identify samples in gsva_res_current that belong to the dominant group and are of the current cell_type
+        samples_in_group <- sample_group_ids$sample_id[
+            sample_group_ids$group.id == dominant_group & 
+            sample_group_ids$cell_type == cell_type
+        ]
+        
+        # Debugging: Print the number of samples found
+        cat("Cell Type:", cell_type, "- Dominant Group:", dominant_group, "- Samples Found:", length(samples_in_group), "\n")
+        
+        # Ensure there are samples in the dominant group
+        if (length(samples_in_group) == 0) {
+            warning(paste("No samples found for group", dominant_group, "in cell type:", cell_type))
+            next
+        }
+        
+        # Subset the GSVA results to only include samples from the dominant group
+        gsva_subset <- gsva_res_current[, samples_in_group, drop = FALSE]
+        
+        # Check if common pathways are present in this cell type
+        valid_pathways <- intersect(common_pathways, rownames(gsva_subset))
+        if (length(valid_pathways) == 0) {
+            warning(paste("No valid common pathways found for cell type:", cell_type))
+            next
+        }
+        
+        # Compute mean GSVA scores for each pathway within the dominant group
+        mean_gsva <- rowMeans(gsva_subset[valid_pathways, , drop = FALSE], na.rm = TRUE)
+        
+        # Store the mean GSVA scores in the matrix
+        mean_gsva_matrix[valid_pathways, cell_type] <- mean_gsva
+    }
+}
+
+# Remove cell types with no mean GSVA scores
+valid_cell_types <- colnames(mean_gsva_matrix)[colSums(!is.na(mean_gsva_matrix)) > 0]
+mean_gsva_matrix <- mean_gsva_matrix[, valid_cell_types, drop = FALSE]
+
+cat("Valid Cell Types with Mean GSVA Scores:\n")
+print(valid_cell_types)
+
+# Debugging: Check if mean_gsva_matrix has valid data
+cat("Mean GSVA Matrix:\n")
+print(head(mean_gsva_matrix))
+
+# Calculate the average mean GSVA score across cell types for each pathway
+average_mean_gsva <- rowMeans(mean_gsva_matrix, na.rm = TRUE)
+
+# Debugging: Print average_mean_gsva
+cat("Average Mean GSVA Scores:\n")
+print(head(average_mean_gsva))
+
+# Select the top 30 pathways based on the average mean GSVA scores
+n_top <- min(50, length(average_mean_gsva))
+top_pathways <- names(sort(average_mean_gsva, decreasing = TRUE))[1:n_top]
+
+# Debugging: Print top pathways
+cat("Selected Top Pathways:\n")
+print(top_pathways)
+
+# Subset the GSVA results to include only the top pathways
+gsva_top_pathways <- lapply(gsva_res_final, function(x) {
+    valid_top_pathways <- intersect(top_pathways, rownames(x))
+    if (length(valid_top_pathways) == 0) {
+        return(NULL)
+    } else {
+        return(x[valid_top_pathways, , drop = FALSE])
+    }
+})
+
+# Remove cell types with no valid pathways
+gsva_top_pathways <- gsva_top_pathways[!sapply(gsva_top_pathways, is.null)]
+
+# Check if any pathways are left after filtering
+if (length(gsva_top_pathways) == 0) {
+    stop("No valid pathways left after filtering.")
+}
+
+# Combine all top pathways into a single matrix
+gsva_res_combined <- do.call(rbind, gsva_top_pathways)
+
+# Ensure Unique Row Names
+rownames(gsva_res_combined) <- make.unique(rownames(gsva_res_combined))
+
+# Step 8: Create Annotations
+pathways_df <- data.frame(
+    pathway = rownames(gsva_res_combined),
+    cell_type = factor(rep(valid_cell_types, each = length(top_pathways)), levels = valid_cell_types),
+    stringsAsFactors = FALSE
+)
+
+sample_annotation <- data.frame(
+    group.id = sample_group_ids$group.id[match(colnames(gsva_res_combined), sample_group_ids$sample_id)],
+    stringsAsFactors = FALSE
+)
+rownames(sample_annotation) <- colnames(gsva_res_combined)
+
+# Debugging: Inspect annotations
+cat("Sample Annotations:\n")
+print(head(sample_annotation))
+cat("Pathway Annotations:\n")
+print(head(pathways_df))
+
+# Define Colors for Groups
+group_ids <- unique(sample_annotation$group.id)
+n_groups <- length(group_ids)
+
+# Ensure at least 3 colors for brewer.pal or handle fewer
+if (n_groups >= 3) {
+    group_palette <- brewer.pal(min(8, n_groups), "Set1")
+} else if (n_groups == 2) {
+    group_palette <- c("red", "blue")
+} else if (n_groups == 1) {
+    group_palette <- "red"
+}
+group_colors <- setNames(
+    group_palette,
+    group_ids
+)
+
+# Define Colors for Cell Types
+cell_types_with_unique <- unique(pathways_df$cell_type)
+n_cell_types <- length(cell_types_with_unique)
+
+# Handle color palette based on the number of cell types
+if (n_cell_types >= 3) {
+    cell_type_palette <- brewer.pal(min(8, n_cell_types), "Set2")
+} else if (n_cell_types == 2) {
+    cell_type_palette <- c("lightblue", "lightgreen")
+} else if (n_cell_types == 1) {
+    cell_type_palette <- "lightblue"
+}
+
+cell_type_colors <- setNames(
+    cell_type_palette,
+    cell_types_with_unique
+)
+
+# Add row annotation for cell types
+row_annotation <- rowAnnotation(
+    Cell_Type = pathways_df$cell_type,
+    col = list(Cell_Type = cell_type_colors),
+    annotation_legend_param = list(Cell_Type = list(title = "Cell Type"))
+)
+
+# Step 9: Generate Heatmap
+ha <- HeatmapAnnotation(
+    df = sample_annotation,
+    col = list(group.id = group_colors),
+    annotation_legend_param = list(group.id = list(title = "Group ID"))
+)
+
+heatmap <- Heatmap(
+    gsva_res_combined,
+    name = "GSVA Score",
+    top_annotation = ha,
+    right_annotation = row_annotation,  # Add row annotation for cell types
+    row_title = "Pathways",
+    column_title = "Samples",
+    col = colorRamp2(c(min(gsva_res_combined, na.rm = TRUE), 0, max(gsva_res_combined, na.rm = TRUE)), c("blue", "white", "red")),
+    row_split = pathways_df$cell_type,
+    show_row_names = TRUE,
+    show_column_names = FALSE
+)
+
+# Draw the Heatmap
+draw(heatmap, heatmap_legend_side = "right", annotation_legend_side = "right")
+
+
+pdf("./outs/GSVA_by_celltype_summarized/gsva_heatmap_all_pathways.50.pdf", width = 14, height = 30)  # Width and height in inches
+
+# Draw the heatmap with legends on the right
+draw(heatmap, heatmap_legend_side = "right", annotation_legend_side = "right")
+
+# Close the graphics device
+dev.off()
+
+
+#write.csv(gsva_res_combined, './outs/GSVA_by_celltype_summarized/gsva_heatmap_all_pathways.50.csv')
+```
+
+
+```{r}
+# Load necessary libraries
+library(ComplexHeatmap)
+library(circlize)
+library(RColorBrewer)
+
+# Step 1: Define Cell Types and Their Dominant Groups
+cell_types <- c("Monocyte", "Macrophage", "Treg", "OC", "Tex")
+dominant_groups <- c("Mono", "MφOC", "TregTex", "OC", "Tex")
+
+# Step 2: Specify File Paths for GSVA and DESeq Results
+gsva_files <- list(
+    "Monocyte" = "~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_mono/gsva_res.C5_immune_bone.rds",
+    "Macrophage" = "~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_macs/gsva_res.C5_immune_bone.rds",
+    "Treg" = "~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_tex/gsva_res.C5_immune_bone.rds",
+    "OC" = "~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_oc/gsva_res.C5_immune_bone.rds",
+    "Tex" = "~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_tex/gsva_res.C5_immune_bone.rds"
+)
+
+deseq_files <- list(
+    "Monocyte" = "~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_mono/DESeq.rds",
+    "Macrophage" = "~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_macs/DESeq.rds",
+    "Treg" = "~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_tex/DESeq.rds",
+    "OC" = "~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_oc/DESeq.rds",
+    "Tex" = "~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_tex/DESeq.rds"
+)
+
+# Step 3: Initialize Lists
+gsva_results <- list()
+deseq_data <- list()
+
+# Helper Function: Clean and Extract Sample IDs
+extract_sample_id <- function(colnames_vector) {
+    cleaned_names <- tolower(colnames_vector)
+    cleaned_names <- gsub("[^a-z0-9_]", "", cleaned_names)
+    sample_ids <- sapply(strsplit(cleaned_names, "_"), function(x) tail(x, 1))
+    return(sample_ids)
+}
+
+# Step 4: Load Data
+for (i in seq_along(cell_types)) {
+    cell_type <- cell_types[i]
+    gsva_file <- gsva_files[[cell_type]]
+    deseq_file <- deseq_files[[cell_type]]
+
+    if (file.exists(gsva_file)) {
+        gsva_res <- readRDS(gsva_file)
+        colnames(gsva_res) <- extract_sample_id(colnames(gsva_res))
+        gsva_results[[cell_type]] <- gsva_res
+    }
+
+    if (file.exists(deseq_file)) {
+        deseq_res <- readRDS(deseq_file)
+        colnames(deseq_res) <- extract_sample_id(colnames(deseq_res))
+        colData(deseq_res)$sample_id <- extract_sample_id(colnames(deseq_res))
+        deseq_data[[cell_type]] <- deseq_res
+    }
+}
+
+# Step 5: Identify Common Samples
+common_samples <- Reduce(intersect, c(
+    lapply(gsva_results, colnames),
+    lapply(deseq_data, function(x) colData(x)$sample_id)
+))
+
+# Step 6: Exclude "ctrl" Samples
+sample_group_ids <- data.frame(sample_id = common_samples, group.id = NA, stringsAsFactors = FALSE)
+
+for (cell_type in cell_types) {
+    if (cell_type %in% names(deseq_data)) {
+        deseq_sub <- deseq_data[[cell_type]]
+        group_id <- deseq_sub$group.id
+        names(group_id) <- deseq_sub$sample_id
+        samples_in_type <- intersect(names(group_id), sample_group_ids$sample_id)
+        sample_group_ids$group.id[sample_group_ids$sample_id %in% samples_in_type] <- group_id[samples_in_type]
+    }
+}
+
+non_ctrl_samples <- sample_group_ids$sample_id[sample_group_ids$group.id != "ctrl" & !is.na(sample_group_ids$group.id)]
+gsva_res_final <- lapply(gsva_results, function(x) x[, non_ctrl_samples, drop = FALSE])
+
+# Step 7: Select Unique Top Pathways
+gsva_top_pathways <- list()
+pathway_cell_type <- c()
+
+# Identify all pathways per cell type
+pathways_per_cell_type <- lapply(gsva_res_final, rownames)
+
+# Identify unique pathways for each cell type
+unique_pathways <- list()
+for (cell_type in cell_types) {
+    other_cell_types <- setdiff(cell_types, cell_type)
+    other_pathways <- unique(unlist(pathways_per_cell_type[other_cell_types]))
+    unique_pathways[[cell_type]] <- setdiff(pathways_per_cell_type[[cell_type]], other_pathways)
+}
+
+# Select top pathways from the unique set
+for (cell_type in cell_types) {
+    if (cell_type %in% names(gsva_res_final)) {
+        unique_ps <- unique_pathways[[cell_type]]
+        if (length(unique_ps) == 0) {
+            warning(paste("No unique pathways found for cell type:", cell_type))
+            next
+        }
+        gsva_res_current <- gsva_res_final[[cell_type]]
+        # Filter to unique pathways
+        gsva_unique <- gsva_res_current[unique_ps, , drop = FALSE]
+        # Compute mean GSVA score
+        mean_gsva <- rowMeans(gsva_unique, na.rm = TRUE)
+        # Determine the number of top pathways to select (up to 10)
+        n_top <- min(50, length(mean_gsva))
+        top_pathways <- names(sort(mean_gsva, decreasing = TRUE))[1:n_top]
+        gsva_top_pathways[[cell_type]] <- gsva_unique[top_pathways, , drop = FALSE]
+        pathway_cell_type <- c(pathway_cell_type, rep(cell_type, length(top_pathways)))
+    }
+}
+
+# Check if any unique pathways were selected
+if (length(gsva_top_pathways) == 0) {
+    stop("No unique pathways were selected for any cell type.")
+}
+
+# Combine all unique top pathways into a single matrix
+gsva_res_combined <- do.call(rbind, gsva_top_pathways)
+
+# Ensure Unique Row Names
+rownames(gsva_res_combined) <- make.unique(rownames(gsva_res_combined))
+
+# Step 8: Create Annotations
+pathways_df <- data.frame(
+    pathway = rownames(gsva_res_combined),
+    cell_type = factor(pathway_cell_type, levels = cell_types),
+    stringsAsFactors = FALSE
+)
+
+sample_annotation <- data.frame(
+    group.id = sample_group_ids$group.id[match(colnames(gsva_res_combined), sample_group_ids$sample_id)],
+    stringsAsFactors = FALSE
+)
+rownames(sample_annotation) <- colnames(gsva_res_combined)
+
+# Define Colors for Groups
+group_ids <- unique(sample_annotation$group.id)
+n_groups <- length(group_ids)
+
+# Ensure at least 3 colors for brewer.pal or handle fewer
+if (n_groups >= 3) {
+    group_palette <- brewer.pal(min(8, n_groups), "Set1")
+} else if (n_groups == 2) {
+    group_palette <- c("red", "blue")
+} else if (n_groups == 1) {
+    group_palette <- "red"
+}
+group_colors <- setNames(
+    group_palette,
+    group_ids
+)
+
+# Define Colors for Cell Types
+cell_types_with_unique <- unique(pathways_df$cell_type)
+n_cell_types <- length(cell_types_with_unique)
+
+# Handle color palette based on the number of cell types
+if (n_cell_types >= 3) {
+    cell_type_palette <- brewer.pal(min(8, n_cell_types), "Set2")
+} else if (n_cell_types == 2) {
+    cell_type_palette <- c("lightblue", "lightgreen")
+} else if (n_cell_types == 1) {
+    cell_type_palette <- "lightblue"
+}
+
+cell_type_colors <- setNames(
+    cell_type_palette,
+    cell_types_with_unique
+)
+
+# Add row annotation for cell types
+row_annotation <- rowAnnotation(
+    Cell_Type = pathways_df$cell_type,
+    col = list(Cell_Type = cell_type_colors),
+    annotation_legend_param = list(Cell_Type = list(title = "Cell Type"))
+)
+
+# Step 9: Generate Heatmap
+ha <- HeatmapAnnotation(
+    df = sample_annotation,
+    col = list(group.id = group_colors),
+    annotation_legend_param = list(group.id = list(title = "Group ID"))
+)
+
+heatmap <- Heatmap(
+    gsva_res_combined,
+    name = "GSVA Score",
+    top_annotation = ha,
+    right_annotation = row_annotation,  # Add row annotation for cell types
+    row_title = "Pathways",
+    column_title = "Samples",
+    col = colorRamp2(c(min(gsva_res_combined, na.rm = TRUE), 0, max(gsva_res_combined, na.rm = TRUE)), c("blue", "white", "red")),
+    row_split = pathways_df$cell_type,
+    show_row_names = TRUE,
+    show_column_names = FALSE
+)
+
+# Draw the Heatmap
+draw(heatmap, heatmap_legend_side = "right", annotation_legend_side = "right")
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+# Load necessary libraries
+library(ComplexHeatmap)
+library(circlize)
+library(RColorBrewer)
+library(dplyr)
+
+# Function to normalize pathway names
+normalize_pathway_names <- function(pathway_names) {
+  pathway_names <- toupper(pathway_names)
+  pathway_names <- trimws(pathway_names)
+  pathway_names <- gsub("[^A-Z0-9_]", "_", pathway_names)
+  return(pathway_names)
+}
+
+# Step 1: Define Cell Types and Dominant Groups
+cell_types <- c("Mono", "Macrophage", "OC", "Treg", "Tex")
+dominant_groups <- c("Mono", "MφOC", "MφOC", "TregTex", "TregTex")  # 5 elements corresponding to cell_types
+
+# Step 2: Specify File Paths for GSVA and DESeq Datasets
+gsva_files <- list(
+  "Mono" = "~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_mono/gsva_res.C5_immune_bone.rds",
+  "Macrophage" = "~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_macs/gsva_res.C5_immune_bone.rds",
+  "OC" = "~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_oc/gsva_res.C5_immune_bone.rds",
+  "Treg" = "~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_treg/gsva_res.C5_immune_bone.rds",
+  "Tex" = "~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_tex/gsva_res.C5_immune_bone.rds"
+)
+
+deseq_files <- list(
+  "Mono" = "~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_mono/DESeq.rds",
+  "Macrophage" = "~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_macs/DESeq.rds",
+  "OC" = "~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_oc/DESeq.rds",
+  "Treg" = "~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_treg/DESeq.rds",
+  "Tex" = "~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_tex/DESeq.rds"
+)
+
+# Step 3: Load GSVA and DESeq Data for Each Cell Type
+gsva_results <- list()
+deseq_data <- list()
+
+for (i in seq_along(cell_types)) {
+  cell_type <- cell_types[i]
+  dominant_group <- dominant_groups[i]
+  
+  cat("Loading data for cell type:", cell_type, "\n")
+  
+  # Load GSVA results
+  gsva_file <- gsva_files[[cell_type]]
+  if (!file.exists(gsva_file)) {
+    warning(paste("GSVA file not found for cell type:", cell_type, "at", gsva_file))
+    next  # Skip to the next cell type
+  }
+  gsva_res <- readRDS(gsva_file)
+  
+  # Load DESeq data
+  deseq_file <- deseq_files[[cell_type]]
+  if (!file.exists(deseq_file)) {
+    warning(paste("DESeq file not found for cell type:", cell_type, "at", deseq_file))
+    next  # Skip to the next cell type
+  }
+  deseq_res <- readRDS(deseq_file)
+  
+  # Process sample names for GSVA results
+  colnames(gsva_res) <- tolower(colnames(gsva_res))
+  colnames(gsva_res) <- gsub("[^a-z0-9_]", "", colnames(gsva_res))
+  colnames(gsva_res) <- sapply(strsplit(colnames(gsva_res), "_"), function(x) tail(x, 1))
+  
+  # Process sample names for DESeq data
+  colnames(deseq_res) <- tolower(colnames(deseq_res))
+  colnames(deseq_res) <- gsub("[^a-z0-9_]", "", colnames(deseq_res))
+  colData(deseq_res)$sample_id <- sapply(strsplit(colnames(deseq_res), "_"), function(x) tail(x, 1))
+  
+  # Store in lists
+  gsva_results[[cell_type]] <- gsva_res
+  deseq_data[[cell_type]] <- deseq_res
+}
+
+# Step 4: Find Common Samples Across All Cell Types
+cat("\nIdentifying common samples across all cell types...\n")
+gsva_sample_lists <- lapply(gsva_results, colnames)
+common_samples <- Reduce(intersect, gsva_sample_lists)
+
+# Ensure samples are present in DESeq data for each cell type
+for (cell_type in cell_types) {
+  if (!(cell_type %in% names(deseq_data))) {
+    warning(paste("DESeq data missing for cell type:", cell_type))
+    next
+  }
+  deseq_sample_ids <- colData(deseq_data[[cell_type]])$sample_id
+  common_samples <- intersect(common_samples, deseq_sample_ids)
+}
+
+# Check if common_samples is non-empty
+if (length(common_samples) == 0) {
+  stop("No common samples found among all cell types.")
+} else {
+  cat("Number of common samples:", length(common_samples), "\n")
+}
+
+# Subset the GSVA results to include only common samples
+gsva_res_sub <- lapply(gsva_results, function(x) x[, common_samples, drop = FALSE])
+
+# Step 5: Select Top 30 Pathways Enriched in Each Cell Type
+cat("\nSelecting top 30 pathways for each cell type based on dominant groups...\n")
+gsva_top_pathways <- list()
+pathway_cell_type <- c()
+
+for (i in seq_along(cell_types)) {
+  cell_type <- cell_types[i]
+  dominant_group <- dominant_groups[i]
+  
+  cat("\nProcessing cell type:", cell_type, "\n")
+  
+  # Check if data exists for the cell type
+  if (!(cell_type %in% names(gsva_res_sub)) | !(cell_type %in% names(deseq_data))) {
+    warning(paste("Data missing for cell type:", cell_type))
+    # Add a dummy pathway to create an empty section
+    dummy_pathway <- paste0("No_Pathways_", cell_type)
+    gsva_top_pathways[[cell_type]] <- matrix(NA, nrow = 1, ncol = length(common_samples))
+    rownames(gsva_top_pathways[[cell_type]]) <- dummy_pathway
+    pathway_cell_type <- c(pathway_cell_type, cell_type)
+    next  # Move to the next cell type
+  }
+  
+  gsva_res_current <- gsva_res_sub[[cell_type]]
+  deseq_current <- deseq_data[[cell_type]]
+  
+  # Get sample IDs for the dominant group
+  group_samples <- deseq_current$sample_id[deseq_current$group.id == dominant_group]
+  group_samples <- intersect(group_samples, common_samples)
+  
+  cat("Number of samples in dominant group (", dominant_group, "): ", length(group_samples), "\n", sep = "")
+  
+  # Check if group_samples is empty
+  if (length(group_samples) == 0) {
+    warning(paste("No samples found for dominant group", dominant_group, "in cell type", cell_type))
+    # Add a dummy pathway to create an empty section
+    dummy_pathway <- paste0("No_Pathways_", cell_type)
+    gsva_top_pathways[[cell_type]] <- matrix(NA, nrow = 1, ncol = length(common_samples))
+    rownames(gsva_top_pathways[[cell_type]]) <- dummy_pathway
+    pathway_cell_type <- c(pathway_cell_type, cell_type)
+    next  # Skip to the next cell type
+  }
+  
+  # Compute mean GSVA scores for each pathway
+  mean_gsva <- rowMeans(gsva_res_current[, group_samples, drop = FALSE], na.rm = TRUE)
+  
+  # Remove pathways with NA mean scores
+  mean_gsva <- mean_gsva[!is.na(mean_gsva)]
+  
+  if (length(mean_gsva) == 0) {
+    warning(paste("No valid GSVA scores for cell type", cell_type))
+    # Add a dummy pathway
+    dummy_pathway <- paste0("No_Pathways_", cell_type)
+    gsva_top_pathways[[cell_type]] <- matrix(NA, nrow = 1, ncol = length(common_samples))
+    rownames(gsva_top_pathways[[cell_type]]) <- dummy_pathway
+    pathway_cell_type <- c(pathway_cell_type, cell_type)
+    next
+  }
+  
+  # Select top 30 pathways
+  num_pathways <- min(10, length(mean_gsva))
+  top_pathways <- names(sort(mean_gsva, decreasing = TRUE))[1:num_pathways]
+  
+  cat("Selected top", length(top_pathways), "pathways for cell type", cell_type, "\n")
+  
+  # Check if pathways exist in GSVA results
+  missing_pathways <- setdiff(top_pathways, rownames(gsva_res_current))
+  if (length(missing_pathways) > 0) {
+    warning(paste("Some top pathways are missing for cell type", cell_type, ":", paste(missing_pathways, collapse = ", ")))
+    # Remove missing pathways from top_pathways
+    top_pathways <- intersect(top_pathways, rownames(gsva_res_current))
+  }
+  
+  # If no pathways remain, add dummy
+  if (length(top_pathways) == 0) {
+    warning(paste("No valid pathways for cell type", cell_type))
+    dummy_pathway <- paste0("No_Pathways_", cell_type)
+    gsva_top_pathways[[cell_type]] <- matrix(NA, nrow = 1, ncol = length(common_samples))
+    rownames(gsva_top_pathways[[cell_type]]) <- dummy_pathway
+    pathway_cell_type <- c(pathway_cell_type, cell_type)
+    next
+  }
+  
+  # Subset GSVA results to top pathways
+  gsva_top_subset <- gsva_res_current[top_pathways, ]
+  
+  # Store in list
+  gsva_top_pathways[[cell_type]] <- gsva_top_subset
+  
+  # Record pathway_cell_type
+  pathway_cell_type <- c(pathway_cell_type, rep(cell_type, length(top_pathways)))
+}
+
+# Step 6: Combine Pathways into One Matrix
+cat("\nCombining top pathways from all cell types into a single matrix...\n")
+gsva_res_combined <- do.call(rbind, gsva_top_pathways)
+
+# Create a data frame for pathway annotations
+pathways_df <- data.frame(
+  pathway = rownames(gsva_res_combined),
+  cell_type = pathway_cell_type,
+  stringsAsFactors = FALSE
+)
+
+# Define the order of cell types
+cell_type_order <- c("Mono", "Macrophage", "OC", "Treg", "Tex")
+
+# Make cell_type a factor with specified order
+pathways_df$cell_type <- factor(pathways_df$cell_type, levels = cell_type_order)
+
+# Arrange pathways by cell type
+pathways_df <- pathways_df %>%
+  arrange(cell_type)
+
+# Reorder gsva_res_combined accordingly
+gsva_res_combined <- gsva_res_combined[pathways_df$pathway, ]
+
+# Update pathway_cell_type
+pathway_cell_type <- pathways_df$cell_type
+
+# Step 7: Create Sample Annotations
+cat("\nCreating sample annotations...\n")
+
+# Create sample annotation data frame using group IDs from "Macrophage"
+if (!("Macrophage" %in% names(deseq_data))) {
+  stop("DESeq data for 'Macrophage' is missing.")
+}
+
+sample_annotation <- data.frame(
+  group.id = deseq_data[["Macrophage"]]$group.id[match(common_samples, deseq_data[["Macrophage"]]$sample_id)],
+  stringsAsFactors = FALSE
+)
+rownames(sample_annotation) <- common_samples
+
+# Replace "Mo" with "Mono" in group.id
+sample_annotation$group.id[sample_annotation$group.id == "Mo"] <- "Mono"
+
+# Assign "Unknown" to samples not in desired groups without excluding them
+desired_groups <- c("Mono", "MφOC", "TregTex")
+sample_annotation$group.id <- ifelse(sample_annotation$group.id %in% desired_groups,
+                                   sample_annotation$group.id, "Unknown")
+
+# Convert group.id to factor with specified levels, including "Unknown"
+desired_groups_extended <- c(desired_groups, "Unknown")
+sample_annotation$group.id <- factor(sample_annotation$group.id, levels = desired_groups_extended)
+
+# Define colors for group.id based on levels
+group_levels <- levels(sample_annotation$group.id)
+num_groups <- length(group_levels)
+
+# Define colors using RColorBrewer's Set1 palette
+group_colors <- setNames(
+  brewer.pal(n = num_groups, name = "Set1"),
+  group_levels
+)
+
+# Assign a specific color to "Unknown" if desired (e.g., grey)
+if ("Unknown" %in% group_levels) {
+  group_colors["Unknown"] <- "grey"
+}
+
+# Replace 'MφOC' with 'MphiOC' to handle special character issues (optional)
+sample_annotation$group.id <- as.character(sample_annotation$group.id)  # Convert to character
+sample_annotation$group.id <- gsub("MφOC", "MphiOC", sample_annotation$group.id)
+sample_annotation$group.id <- factor(sample_annotation$group.id, levels = c("Mono", "MphiOC", "TregTex", "Unknown"))
+
+# Update group_colors accordingly
+group_colors <- setNames(
+  brewer.pal(n = length(levels(sample_annotation$group.id)), name = "Set1"),
+  levels(sample_annotation$group.id)
+)
+
+# Assign a distinct color to "Unknown" if desired
+if ("Unknown" %in% levels(sample_annotation$group.id)) {
+  group_colors["Unknown"] <- "grey"
+}
+
+# Reorder sample_annotation to match gsva_res_combined column order
+if (!all(colnames(gsva_res_combined) == rownames(sample_annotation))) {
+  cat("Reordering sample_annotation to match gsva_res_combined column order...\n")
+  sample_annotation <- sample_annotation[colnames(gsva_res_combined), , drop = FALSE]
+}
+
+# Verify alignment
+alignment <- all(colnames(gsva_res_combined) == rownames(sample_annotation))
+cat("Do sample_annotation row names match gsva_res_combined column names? ", alignment, "\n")
+
+if (!alignment) {
+  stop("Mismatch between gsva_res_combined columns and sample_annotation row names.")
+} else {
+  cat("Sample annotations successfully aligned with heatmap columns.\n")
+}
+
+# Print group.id levels and colors for verification
+cat("Levels of group.id:\n")
+print(levels(sample_annotation$group.id))
+
+cat("Group Colors Mapping:\n")
+print(group_colors)
+
+# Check for NA values in group.id after handling
+na_count <- sum(is.na(sample_annotation$group.id))
+cat("Number of NA values in group.id after handling:", na_count, "\n")
+
+# Ensure no NAs remain
+if (na_count > 0) {
+  warning("There are NA values in group.id. Assigning them to 'Unknown'.")
+  sample_annotation$group.id[is.na(sample_annotation$group.id)] <- "Unknown"
+  # Re-convert to factor including 'Unknown'
+  sample_annotation$group.id <- factor(sample_annotation$group.id, levels = c("Mono", "MphiOC", "TregTex", "Unknown"))
+}
+
+# Create HeatmapAnnotation for sample annotations
+ha <- HeatmapAnnotation(
+  df = sample_annotation,
+  col = list(
+    group.id = group_colors
+  ),
+  annotation_legend_param = list(
+    group.id = list(title = "Group ID")
+  )
+)
+
+# Step 8: Plot the Heatmap
+cat("\nGenerating the heatmap...\n")
+
+# Define color function based on data range and handle NA values
+color_fun <- colorRamp2(c(min(gsva_res_combined, na.rm = TRUE), 
+                          0, 
+                          max(gsva_res_combined, na.rm = TRUE)), 
+                        c("blue", "white", "red"))
+
+# Define colors for cell types in row annotations
+cell_type_colors <- setNames(
+  brewer.pal(n = length(cell_type_order), name = "Dark2"),
+  cell_type_order
+)
+
+# Create row annotation for cell types
+row_annotation <- rowAnnotation(
+  Cell_Type = pathway_cell_type,
+  col = list(Cell_Type = cell_type_colors),
+  show_annotation_name = TRUE,
+  annotation_legend_param = list(Cell_Type = list(title = "Cell Type"))
+)
+
+# Create the heatmap with row_split and row_annotation
+heatmap <- Heatmap(
+  gsva_res_combined,
+  name = "GSVA Score",
+  top_annotation = ha,
+  right_annotation = row_annotation,  # Add row annotations
+  show_column_names = FALSE,
+  cluster_columns = TRUE,
+  cluster_rows = FALSE,  # Rows are ordered manually
+  column_title = "Samples",
+  row_title = "Pathways",
+  col = color_fun,
+  row_names_gp = gpar(fontsize = 8),
+  row_split = pathway_cell_type,  # Split rows by cell type
+  row_order = order(pathway_cell_type, decreasing = FALSE),
+  row_gap = unit(2, "mm"),
+  row_title_rot = 0,
+  row_title_gp = gpar(fontsize = 10, fontface = "bold"),
+  na_col = "gray"  # Color for NA values (dummy pathways)
+)
+
+# Draw the heatmap with legends on the right
+draw(heatmap, heatmap_legend_side = "right", annotation_legend_side = "right")
+
+#write.csv(gsva_res_combined, './outs/GSVA_by_celltype_summarized/gsva_res_combined.csv')
+```
+
+
+```{r}
+# Load necessary libraries
+library(ComplexHeatmap)
+library(circlize)
+library(RColorBrewer)
+
+# Step 1: Load and Prepare Data
+
+# Define cell types and their corresponding dominant groups
+cell_types <- c("Mono", "Macrophage", "OC", "Treg", "Tex")
+dominant_groups <- c("Mono", "MφOC", "MφOC", "TregTex", "TregTex")  # 5 elements corresponding to cell_types
+
+# Specify file paths for each cell type's GSVA and DESeq results
+gsva_files <- list(
+  "Mono" = "~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_mono/gsva_res.C5_immune_bone.rds",
+  "Macrophage" = "~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_macs/gsva_res.C5_immune_bone.rds",
+  "OC" = "~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_oc/gsva_res.C5_immune_bone.rds",
+  "Treg" = "~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_treg/gsva_res.C5_immune_bone.rds",
+  "Tex" = "~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_tex/gsva_res.C5_immune_bone.rds"
+)
+
+deseq_files <- list(
+  "Mono" = "~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_mono/DESeq.rds",
+  "Macrophage" = "~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_macs/DESeq.rds",
+  "OC" = "~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_oc/DESeq.rds",
+  "Treg" = "~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_treg/DESeq.rds",
+  "Tex" = "~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Lab/Yunfeng/cancer_comparsions/pseudobulk/outs/GSVA_tex/DESeq.rds"
+)
+
+# Initialize lists to store GSVA results and DESeq data
+gsva_results <- list()
+deseq_data <- list()
+
+# Load GSVA results and DESeq data for each cell type
+for (i in seq_along(cell_types)) {
+  cell_type <- cell_types[i]
+  dominant_group <- dominant_groups[i]
+  
+  cat("Loading data for cell type:", cell_type, "\n")
+  
+  # Load GSVA results
+  gsva_file <- gsva_files[[cell_type]]
+  if (!file.exists(gsva_file)) {
+    warning(paste("GSVA file not found for cell type:", cell_type, "at", gsva_file))
+    next  # Skip to the next cell type
+  }
+  gsva_res <- readRDS(gsva_file)
+  
+  # Load DESeq data
+  deseq_file <- deseq_files[[cell_type]]
+  if (!file.exists(deseq_file)) {
+    warning(paste("DESeq file not found for cell type:", cell_type, "at", deseq_file))
+    next  # Skip to the next cell type
+  }
+  deseq_res <- readRDS(deseq_file)
+  
+  # Process sample names to extract sample IDs for GSVA results
+  colnames(gsva_res) <- tolower(colnames(gsva_res))
+  colnames(gsva_res) <- gsub("[^a-z0-9_]", "", colnames(gsva_res))
+  colnames(gsva_res) <- sapply(strsplit(colnames(gsva_res), "_"), function(x) tail(x, 1))
+  
+  # Process sample names to extract sample IDs for DESeq data
+  colnames(deseq_res) <- tolower(colnames(deseq_res))
+  colnames(deseq_res) <- gsub("[^a-z0-9_]", "", colnames(deseq_res))
+  colData(deseq_res)$sample_id <- sapply(strsplit(colnames(deseq_res), "_"), function(x) tail(x, 1))
+  
+  # Store in lists
+  gsva_results[[cell_type]] <- gsva_res
+  deseq_data[[cell_type]] <- deseq_res
+}
+
+# Step 2: Find Common Samples
+
+# Identify common samples across all GSVA datasets
+gsva_sample_lists <- lapply(gsva_results, colnames)
+common_samples <- Reduce(intersect, gsva_sample_lists)
+
+# Ensure samples are present in DESeq data for each cell type
+for (cell_type in cell_types) {
+  if (!(cell_type %in% names(deseq_data))) {
+    warning(paste("DESeq data missing for cell type:", cell_type))
+    next
+  }
+  deseq_sample_ids <- colData(deseq_data[[cell_type]])$sample_id
+  common_samples <- intersect(common_samples, deseq_sample_ids)
+}
+
+# Check if common_samples is non-empty
+if (length(common_samples) == 0) {
+  stop("No common samples found among all cell types.")
+} else {
+  cat("Number of common samples:", length(common_samples), "\n")
+}
+
+# Subset the GSVA results to include only common samples
+gsva_res_sub <- lapply(gsva_results, function(x) x[, common_samples, drop = FALSE])
+
+# Step 3: Select Top Pathways Enriched in Each Cell Type
+
+# Initialize lists to store top pathways and pathway annotations
+gsva_top_pathways <- list()
+pathway_cell_type <- c()
+
+for (i in seq_along(cell_types)) {
+  cell_type <- cell_types[i]
+  dominant_group <- dominant_groups[i]
+  
+  cat("\nProcessing cell type:", cell_type, "\n")
+  
+  # Check if data exists for the cell type
+  if (!(cell_type %in% names(gsva_res_sub)) | !(cell_type %in% names(deseq_data))) {
+    warning(paste("Data missing for cell type:", cell_type))
+    next  # Skip to the next cell type
+  }
+  
+  gsva_res_current <- gsva_res_sub[[cell_type]]
+  deseq_current <- deseq_data[[cell_type]]
+  
+  # Get sample IDs for the dominant group
+  group_samples <- deseq_current$sample_id[deseq_current$group.id == dominant_group]
+  group_samples <- intersect(group_samples, common_samples)
+  
+  # Check if group_samples is empty
+  if (length(group_samples) == 0) {
+    warning(paste("No samples found for dominant group", dominant_group, "in cell type", cell_type))
+    next  # Skip to the next cell type
+  }
+  
+  # Compute mean GSVA scores for each pathway
+  mean_gsva <- rowMeans(gsva_res_current[, group_samples, drop = FALSE], na.rm = TRUE)
+  
+  # Handle cases where mean_gsva is NA
+  mean_gsva <- mean_gsva[!is.na(mean_gsva)]
+  
+  if (length(mean_gsva) == 0) {
+    warning(paste("No valid GSVA scores for cell type", cell_type))
+    next
+  }
+  
+  # Select top pathways (e.g., top 100 or all if fewer)
+  num_pathways <- min(50, length(mean_gsva))  # Adjust the number as needed
+  top_pathways <- names(sort(mean_gsva, decreasing = TRUE))[1:num_pathways]
+  
+  # Check if pathways exist in GSVA results
+  missing_pathways <- setdiff(top_pathways, rownames(gsva_res_current))
+  if (length(missing_pathways) > 0) {
+    warning(paste("Some top pathways are missing for cell type", cell_type, ":", paste(missing_pathways, collapse = ", ")))
+    # Remove missing pathways from top_pathways
+    top_pathways <- intersect(top_pathways, rownames(gsva_res_current))
+  }
+  
+  # If no pathways remain, skip
+  if (length(top_pathways) == 0) {
+    warning(paste("No valid pathways for cell type", cell_type))
+    next
+  }
+  
+  # Subset GSVA results to top pathways
+  gsva_top_subset <- gsva_res_current[top_pathways, ]
+  
+  # Store in list
+  gsva_top_pathways[[cell_type]] <- gsva_top_subset
+  
+  # Record pathway_cell_type
+  pathway_cell_type <- c(pathway_cell_type, rep(cell_type, length(top_pathways)))
+}
+
+# Step 4: Combine Pathways into One Matrix
+
+# Combine all top pathways into one matrix
+gsva_res_combined <- do.call(rbind, gsva_top_pathways)
+
+# Create a data frame for pathway annotations
+pathways_df <- data.frame(
+  pathway = rownames(gsva_res_combined),
+  cell_type = pathway_cell_type,
+  stringsAsFactors = FALSE
+)
+
+# Define the order of cell types
+cell_type_order <- c("Mono", "Macrophage", "OC", "Treg", "Tex")
+
+# Make cell_type a factor with specified order
+pathways_df$cell_type <- factor(pathways_df$cell_type, levels = cell_type_order)
+
+# Arrange pathways by cell type
+pathways_df <- pathways_df[order(pathways_df$cell_type), ]
+
+# Reorder gsva_res_combined accordingly
+gsva_res_combined <- gsva_res_combined[pathways_df$pathway, ]
+
+# Update pathway_cell_type
+pathway_cell_type <- pathways_df$cell_type
+
+# Step 5: Create Sample Annotations
+
+# Create sample annotation data frame using group IDs from a reference cell type (e.g., "Macrophage")
+# Assuming group.id is consistent across cell types; adjust if necessary
+reference_cell_type <- "Macrophage"
+if (!(reference_cell_type %in% names(deseq_data))) {
+  stop(paste("DESeq data for", reference_cell_type, "is missing."))
+}
+
+sample_annotation <- data.frame(
+  group.id = deseq_data[[reference_cell_type]]$group.id[match(common_samples, deseq_data[[reference_cell_type]]$sample_id)],
+  stringsAsFactors = FALSE
+)
+rownames(sample_annotation) <- common_samples
+
+# Replace any unexpected group IDs with "Unknown" (optional)
+# Modify this section based on your actual group IDs and desired handling
+sample_annotation$group.id <- ifelse(sample_annotation$group.id %in% c("Mono", "MφOC", "TregTex"),
+                                    sample_annotation$group.id, "Unknown")
+
+# Define colors for group.id
+group_levels <- unique(sample_annotation$group.id)
+group_colors <- setNames(
+  brewer.pal(min(length(group_levels), 8), "Set1"),  # Use Set1 palette with up to 8 colors
+  group_levels
+)
+
+# Create HeatmapAnnotation
+ha <- HeatmapAnnotation(
+  df = sample_annotation,
+  col = list(
+    group.id = group_colors
+  ),
+  annotation_legend_param = list(
+    group.id = list(title = "Group ID")
+  )
+)
+
+# Step 6: Plot the Heatmap
+
+# Define color function based on data range and handle NA values
+color_fun <- colorRamp2(c(min(gsva_res_combined, na.rm = TRUE), 
+                          0, 
+                          max(gsva_res_combined, na.rm = TRUE)), 
+                        c("blue", "white", "red"))
+
+# Create the heatmap with adjusted figure size
+heatmap <- Heatmap(
+  gsva_res_combined,
+  name = "GSVA Score",
+  top_annotation = ha,
+  show_column_names = FALSE,
+  cluster_columns = TRUE,
+  cluster_rows = FALSE,  # Rows are ordered manually by cell type
+  column_title = "Samples",
+  row_title = "Pathways",
+  col = color_fun,
+  row_names_gp = gpar(fontsize = 8),
+  row_split = pathway_cell_type,  # Split rows by cell type
+  row_order = order(pathway_cell_type, decreasing = FALSE),
+  row_title_rot = 0,
+  row_title_gp = gpar(fontsize = 3, fontface = "bold"),
+  na_col = "gray"  # Color for NA values (if any)
+)
+
+# Save the heatmap to a PDF with specified size
+#pdf("./outs/GSVA_by_celltype_summarized/gsva_res_combined_imm_bone_top_50_for_10.pdf", width = 10, height = 8)  # Width and height in inches
+
+# Draw the heatmap with legends on the right
+draw(heatmap, heatmap_legend_side = "right", annotation_legend_side = "right")
+
+# Close the graphics device
+#dev.off()
+
+# Alternatively, to display in the R plotting window with adjusted size:
+# Adjust the plotting window size manually or programmatically
+# windows(width = 14, height = 30)  # For Windows OS
+# quartz(width = 14, height = 30)   # For macOS
+# x11(width = 14, height = 30)      # For Linux or cross-platform
+
+# Draw the heatmap
+#draw(heatmap, heatmap_legend_side = "right", annotation_legend_side = "right")
+
+write.csv(gsva_res_combined, './outs/GSVA_by_celltype_summarized/gsva_res_combined_imm_bone_top_50_for_10.csv')
+```
+

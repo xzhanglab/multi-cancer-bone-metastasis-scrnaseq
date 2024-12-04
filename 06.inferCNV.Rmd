@@ -1,0 +1,510 @@
+---
+title: "06.inferCNV"
+output: html_document
+date: "2023-12-16"
+---
+
+```{r}
+#rm(list = ls())
+library(infercnv)
+library(dplyr)
+library(Seurat)
+library(ggplot2)
+library(scCustomize)
+library(RColorBrewer)
+library(viridis)
+```
+
+```{r}
+options(scipen = 100)
+options(error = function() traceback(2))
+
+options(bitmapType="Xlib") # if you are using linux system
+```
+
+```{r, read data}
+All.merge <readRDS('./data/infercnv/epi_stro.rds')
+```
+
+
+```{r}
+DefaultAssay(All.merge) <- "RNA"
+All.merge$celltype=All.merge$integrated_snn_res.0.6
+seurat_obj=All.merge
+
+
+# seurat 3.0+
+counts_matrix = Seurat::GetAssayData(seurat_obj, layer="counts")
+
+
+
+cellanno = FetchData(seurat_obj, vars = "celltype" ) %>% tibble::rownames_to_column(var = "cellbarcode")
+write.table(cellanno, "./data/infercnv/cnv_cellanno.txt", sep = "\t", col.names = F,row.names =FALSE, quote =F )
+head(cellanno)
+
+
+gtf = "./data/infercnv/GRCh38.genes.gtf"
+gtf = plyranges::read_gff(gtf)  
+head(gtf)
+table(gtf$type)
+gene_order_anno = gtf %>% plyranges::filter(type == "gene" & gene_name %in% rownames(seurat_obj)) %>%
+  as.data.frame() %>%
+  dplyr::select(gene_name, seqnames, start, end) %>%
+  dplyr::distinct(gene_name, .keep_all=T) 
+head(gene_order_anno)
+write.table(gene_order_anno, "./data/infercnv/gene_order_anno.txt", col.names =F, row.names =F, sep = "\t", quote =F )
+head(gene_order_anno)
+
+getwd()
+head(cellanno)
+
+
+print("=======run======here==========")
+table(cellanno$celltype)
+4
+# create the infercnv object
+infercnv_obj = CreateInfercnvObject(raw_counts_matrix=counts_matrix,  
+                                    annotations_file="./data/infercnv/cnv_cellanno.txt",
+                                    delim="\t",
+                                    gene_order_file="./data/infercnv/gene_order_anno.txt",
+                                    ref_group_names=c(#'immune'
+                                                      '0',
+                                                      '1',
+                                                      '4',
+                                                      '6',
+                                                      '7',
+                                                      '8',
+                                                      '10'
+                                                      ))  # 
+
+
+
+
+5
+
+# perform infercnv operations to reveal cnv signal
+infercnv_obj = infercnv::run(infercnv_obj,
+                             cutoff=0.1,  # use 1 for smart-seq, 0.1 for 10x-genomics
+                             out_dir="./outs/infercnv/",  
+                             analysis_mode="subclusters", 
+                             cluster_by_groups=T,  
+                             denoise=T,  #
+                             noise_logistic=TRUE, # turns gradient filtering on
+                             num_threads=20, 
+                             HMM=T) 
+#2 
+infercnv_obj = infercnv::run(infercnv_obj,
+                             cutoff=1, # cutoff=1 works well for Smart-seq2, and cutoff=0.1 works well for 10x Genomics
+                             out_dir=out_dir, 
+                             cluster_by_groups=T, 
+                             plot_steps=F,
+                             denoise=T,
+                             sd_amplifier=3,  # sets midpoint for logistic
+                             noise_logistic=TRUE # turns gradient filtering on
+                             )
+
+#3 
+
+infercnv_obj_medianfiltered = infercnv::apply_median_filtering(infercnv_obj)
+
+infercnv::plot_cnv(infercnv_obj_medianfiltered, 
+                   out_dir='./outs/inferCNV_stroma/',
+                   output_filename='infercnv.median_filtered', 
+                   cluster_by_groups = TRUE,
+                   #k_obs_groups = 3,
+                   x.range="auto",
+                   x.center=1,
+                   title = "infercnv", 
+                   output_format = "pdf",
+                   write_phylo = FALSE,
+                   color_safe_pal = FALSE)
+
+save(infercnv_obj,file = "./data/infercnv/infercnv_obj.rds")
+save(infercnv_obj_medianfiltered,file = "./data/infercnv/infercnv_obj_medianfiltered.rds")
+
+```
+
+#apply infercnv result
+
+```{r}
+All.merge <- readRDS("./data/infercnv/epi_stro.rds")
+infer_CNV_obj<-readRDS('./outs/infercsv_outs/run.final.infercnv_obj')
+expr<-infer_CNV_obj@expr.data
+expr[1:4,1:4]
+data_cnv<-as.data.frame(expr)
+dim(expr)
+colnames(data_cnv)
+rownames(data_cnv)
+
+meta <- All.merge@meta.data
+```
+
+```{r}
+if(T){
+  tmp1 = expr[,infer_CNV_obj@reference_grouped_cell_indices$`ref-1`]
+  tmp2 = expr[,infer_CNV_obj@reference_grouped_cell_indices$`ref-2`]
+  tmp= cbind(tmp1,tmp2)
+  down=mean(rowMeans(tmp)) - 2 * mean( apply(tmp, 1, sd))
+  up=mean(rowMeans(tmp)) + 2 * mean( apply(tmp, 1, sd))
+  oneCopy=up-down
+  oneCopy
+  a1= down- 2*oneCopy
+  a2= down- 1*oneCopy
+  down;up
+  a3= up +  1*oneCopy
+  a4= up + 2*oneCopy 
+  
+  cnv_score_table<-infer_CNV_obj@expr.data
+  cnv_score_table[1:4,1:4]
+  cnv_score_mat <- as.matrix(cnv_score_table)
+  
+  # Scoring
+  cnv_score_table[cnv_score_mat > 0 & cnv_score_mat < a2] <- "A" #complete loss. 2pts
+  cnv_score_table[cnv_score_mat >= a2 & cnv_score_mat < down] <- "B" #loss of one copy. 1pts
+  cnv_score_table[cnv_score_mat >= down & cnv_score_mat <  up ] <- "C" #Neutral. 0pts
+  cnv_score_table[cnv_score_mat >= up  & cnv_score_mat <= a3] <- "D" #addition of one copy. 1pts
+  cnv_score_table[cnv_score_mat > a3  & cnv_score_mat <= a4 ] <- "E" #addition of two copies. 2pts
+  cnv_score_table[cnv_score_mat > a4] <- "F" #addition of more than two copies. 2pts
+  
+  # Check
+  table(cnv_score_table[,1])
+  # Replace with score 
+  cnv_score_table_pts <- cnv_score_mat
+  rm(cnv_score_mat)
+  # 
+  cnv_score_table_pts[cnv_score_table == "A"] <- 2
+  cnv_score_table_pts[cnv_score_table == "B"] <- 1
+  cnv_score_table_pts[cnv_score_table == "C"] <- 0
+  cnv_score_table_pts[cnv_score_table == "D"] <- 1
+  cnv_score_table_pts[cnv_score_table == "E"] <- 2
+  cnv_score_table_pts[cnv_score_table == "F"] <- 3
+   
+  cnv_score_table_pts[1:4,1:4]
+  str(  as.data.frame(cnv_score_table_pts[1:4,1:4])) 
+  cell_scores_CNV <- as.data.frame(colSums(cnv_score_table_pts))
+  
+  colnames(cell_scores_CNV) <- "cnv_score" 
+}
+```
+
+```{r}
+head(cell_scores_CNV) 
+score=cell_scores_CNV
+head(score)
+meta$totalCNV = score[match(colnames(All.merge),
+                            rownames(score)),1] 
+
+All.merge$totalCNV = score[match(colnames(All.merge),
+                            rownames(score)),1] 
+
+
+ggplot(meta, aes(x=celltype_C , y=totalCNV, fill=totalCNV )) +
+  geom_boxplot()+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) # Rotate x-axis labels for readability
+#ggsave(filename = "score_per_infercnv_subcluster.pdf", width = 20,height = 5, dpi = 600, device=cairo_pdf, path = './outs/inferCNV_stroma//')
+
+
+##ordered boxplot by subclusters
+
+# Calculate the median of totalCNV for each infercnv_subcluster
+ordering <- meta %>%
+  group_by(infercnv_subcluster) %>%
+  summarise(median_totalCNV = median(totalCNV)) %>%
+  arrange(desc(median_totalCNV)) %>%
+  mutate(infercnv_subcluster = factor(infercnv_subcluster, levels = infercnv_subcluster))
+
+# Merge the ordering information back to the original data frame
+meta <- meta %>%
+  left_join(ordering, by = "infercnv_subcluster")
+
+# Now plot with the ordered factor levels and remove outliers
+ggplot(meta, aes(x=infercnv_subcluster, y=totalCNV, fill=infercnv_subcluster)) +
+  geom_boxplot(outlier.shape = NA) +  # Remove outliers
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, ),
+        legend.position = "none") +
+  scale_x_discrete(limits = ordering$infercnv_subcluster) + # Order the x-axis based on median_totalCNV
+  scale_fill_brewer(palette = "viridis")  # Use a predefined color palette
+
+
+ggsave(filename = "score_per_infercnv_subcluster_ordered_by_infercnv_subcluster.pdf", width = 25,height = 5, dpi = 600, device=cairo_pdf, path = './outs/infercnv/')
+
+
+
+
+
+
+##order boxplot by sample.ID
+
+# Calculate the median of totalCNV for each infercnv_subcluster
+ordering <- meta %>%
+  group_by(cancer.id) %>%
+  summarise(median_totalCNV = median(totalCNV)) %>%
+  arrange(desc(median_totalCNV)) %>%
+  mutate(infercnv_subcluster = factor(cancer.id, levels = cancer.id))
+
+ordering <- meta %>%
+  group_by(cancer.id) %>%
+  summarise(sum_totalCNV = mean(totalCNV, na.rm = TRUE)) %>%
+  arrange(desc(sum_totalCNV)) %>%
+  mutate(infercnv_subcluster = factor(cancer.id, levels = cancer.id))
+
+#export the ordering
+
+write.csv(ordering, './outs/cnv_score_cancer.id_new.csv')
+# Merge the ordering information back to the original data frame
+meta <- meta %>%
+  left_join(ordering, by = "cancer.id")
+
+# Now plot with the ordered factor levels and remove outliers
+ggplot(meta, aes(x=cancer.id, y=totalCNV, fill=cancer.id)) +
+  geom_boxplot(outlier.shape = NA) +  # Remove outliers
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, ),
+        legend.position = "none") +
+  scale_x_discrete(limits = ordering$cancer.id) + # Order the x-axis based on median_totalCNV
+  scale_fill_brewer(palette = "Set3")  # Use a predefined color palette
+
+ggsave(filename = "score_per_infercnv_subcluster_ordered_by_sample.pdf", width = 15,height = 5, dpi = 600, device=cairo_pdf, path = './outs/infercnv/')
+
+
+
+# Calculate the median of totalCNV for each infercnv_subcluster
+ordering <- meta %>%
+  group_by(infercnv_subcluster) %>%
+  summarise(median_totalCNV = median(totalCNV)) %>%
+  arrange(desc(median_totalCNV)) %>%
+  mutate(infercnv_subcluster = factor(infercnv_subcluster, levels = infercnv_subcluster))
+
+# Merge the ordering information back to the original data frame
+meta <- meta %>%
+  left_join(ordering, by = "infercnv_subcluster")
+
+# Now plot with the ordered factor levels and remove outliers
+ggplot(meta, aes(x=infercnv_subcluster, y=totalCNV, fill=infercnv_subcluster)) +
+  geom_boxplot(outlier.shape = NA) +  # Remove outliers
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, ),
+        legend.position = "none") +
+  scale_x_discrete(limits = ordering$infercnv_subcluster) + # Order the x-axis based on median_totalCNV
+  scale_fill_brewer(palette = "Set2")  # Use a predefined color palette
+
+
+
+
+ggsave(filename = "score_per_infercnv_subcluster_ordered_by_sample.pdf", width = 15,height = 5, dpi = 600, device=cairo_pdf, path = './outs/infercnv/')
+
+
+
+
+# Example in R with Seurat
+VlnPlot(All.merge, features = marker_genes_of_celltype_A, group.by = "condition")
+
+```
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(viridis)
+
+# Extract the metadata
+meta <- All.merge@meta.data
+
+# Step 1: Calculate the mean and standard deviation of totalCNV for reference clusters
+reference_clusters <- c(1, 2, 4, 5)
+
+reference_stats <- meta %>%
+  filter(rpca_clusters %in% reference_clusters) %>%
+  summarise(
+    mean_totalCNV = mean(totalCNV),
+    sd_totalCNV = sd(totalCNV)
+  )
+
+mean_ref <- reference_stats$mean_totalCNV
+sd_ref <- reference_stats$sd_totalCNV
+
+# Step 2: Normalize totalCNV for cells in rpca_clusters 0 and 3
+# Correct the scaling to make sure 0 and 3 are higher
+meta <- meta %>%
+  mutate(
+    totalCNV_normalized = ifelse(rpca_clusters %in% c(0, 3),
+                                 (totalCNV - mean_ref) / sd_ref,
+                                 NA)
+  )
+
+# Step 3: Rescale totalCNV_normalized for clusters 0 and 3 to reflect higher scores
+# Set minimum to 0 and maximum to 10, ensuring 0 and 3 are properly scaled
+min_val <- min(meta$totalCNV_normalized[meta$rpca_clusters %in% c(0, 3)], na.rm = TRUE)
+max_val <- max(meta$totalCNV_normalized[meta$rpca_clusters %in% c(0, 3)], na.rm = TRUE)
+
+meta <- meta %>%
+  mutate(
+    totalCNV_scaled = ifelse(rpca_clusters %in% c(0, 3),
+                             10 * (totalCNV_normalized - min_val) / (max_val - min_val),
+                             NA)
+  )
+
+# Correct scaling for reference clusters to ensure a proper comparison
+# Rescale reference clusters to have a range similar to the normalized 0 and 3 clusters
+meta <- meta %>%
+  mutate(totalCNV_scaled = ifelse(is.na(totalCNV_scaled), 
+                                  (totalCNV - mean_ref) / sd_ref * 10, 
+                                  totalCNV_scaled))
+
+# Store back in All.merge metadata
+All.merge@meta.data <- meta
+
+# Step 4: Recalculate ordering based on scaled totalCNV
+ordering_scaled <- meta %>%
+  group_by(infercnv_subcluster) %>%
+  summarise(median_totalCNV_scaled = median(totalCNV_scaled)) %>%
+  arrange(desc(median_totalCNV_scaled)) %>%
+  mutate(infercnv_subcluster = factor(infercnv_subcluster, levels = infercnv_subcluster))
+
+# Merge the ordering information back to the metadata
+meta <- meta %>%
+  left_join(ordering_scaled, by = "infercnv_subcluster")
+
+# Step 5: Plot the normalized and scaled totalCNV for all infercnv_subclusters
+# Color scale based on rank
+meta <- meta %>%
+  mutate(rank_order = as.numeric(factor(infercnv_subcluster, levels = ordering_scaled$infercnv_subcluster)))
+
+ggplot(meta, aes(x = infercnv_subcluster, y = totalCNV_scaled, fill = rank_order)) +
+  geom_boxplot(outlier.shape = NA) +  # Remove outliers
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.position = "none") +
+  scale_x_discrete(limits = ordering_scaled$infercnv_subcluster) +  # Order the x-axis based on median_totalCNV_scaled
+  scale_fill_viridis_c(option = "D", direction = -1) +  # Use viridis color palette with gradient based on rank
+  labs(x = "Infercnv Subcluster", y = "Scaled Total CNV", title = "Scaled Total CNV per Infercnv Subcluster")
+
+ggsave(filename = "infercnv_subcluster.pdf", width = 15,height = 5, dpi = 600, device=cairo_pdf, path = './outs/')
+
+```
+
+
+```{r}
+#re-classfying the sub_clusters
+# Load necessary library
+library(dplyr)
+
+# Assuming 'All.merge' is your Seurat object
+# Extract unique 'infercnv_subcluster' and their corresponding 'rank_order'
+cluster_info <- All.merge@meta.data %>%
+  select(infercnv_subcluster, rank_order) %>%
+  distinct()
+
+# Extract the cluster prefix (number before the underscore)
+cluster_info <- cluster_info %>%
+  mutate(cluster_prefix = sub('_.*', '', infercnv_subcluster))
+
+# Assign 'ref' to clusters starting with 1, 2, 4, or 5
+clusters_ref <- cluster_info %>%
+  filter(cluster_prefix %in% c('1', '2', '4', '5')) %>%
+  mutate(cnv_burden = 'ref')
+
+# For clusters starting with 0 or 3
+clusters_0_3 <- cluster_info %>%
+  filter(cluster_prefix %in% c('0', '3'))
+
+# Calculate the median of 'rank_order' for clusters starting with 0 or 3
+median_rank <- median(clusters_0_3$rank_order)
+
+# Assign 'high_cnv' or 'low_cnv' based on 'rank_order' compared to the median
+clusters_0_3 <- clusters_0_3 %>%
+  mutate(cnv_burden = ifelse(rank_order <= median_rank, 'high_cnv', 'low_cnv'))
+
+# Combine the two groups
+cluster_cnv_burden <- bind_rows(clusters_ref, clusters_0_3)
+
+# Merge the 'cnv_burden' information back into the Seurat object's metadata
+All.merge@meta.data <- All.merge@meta.data %>%
+  left_join(cluster_cnv_burden[, c('infercnv_subcluster', 'cnv_burden')], by = 'infercnv_subcluster')
+
+# Optional: Check the result
+table(All.merge@meta.data$cnv_burden)
+unique(All.merge$cnv_burden)
+
+saveRDS(obj, './data/Epi.rds')
+```
+
+```{r}
+# Check if the number of cells (columns) in both objects is the same
+if (ncol(obj) != ncol(epi_stro)) {
+  stop("The number of cells in obj and epi_stro do not match.")
+}
+
+# Assign the cell names from epi_stro to obj
+# Update column names in the assays (counts, data, scale.data)
+colnames(obj@assays$RNA@counts) <- colnames(epi_stro)
+colnames(obj@assays$RNA@data) <- colnames(epi_stro)
+
+# If scale.data exists, update its column names
+if (!is.null(obj@assays$RNA@scale.data)) {
+  colnames(obj@assays$RNA@scale.data) <- colnames(epi_stro)
+}
+
+# Update row names in the meta.data
+rownames(obj@meta.data) <- colnames(epi_stro)
+
+# The following line is not needed and should be removed:
+# obj@cell.names <- colnames(epi_stro)
+
+# Optional: Verify that the cell names have been updated
+head(colnames(obj))
+head(rownames(obj@meta.data))
+
+```
+
+
+
+```{r}
+# Assuming "score" is your dataframe and "All.merge" is your Seurat object with metadata
+
+# Convert the metadata from the Seurat object to a dataframe
+meta <- data.frame(barcode = colnames(All.merge), 
+                   cancer.id = All.merge$cancer.id, 
+                   cancer = All.merge$cancer, 
+                   celltype_C = All.merge$celltype_C,
+                   row.names = NULL)
+
+# Merge "score" dataframe with metadata based on matching cell barcodes
+infercnv_score_patient <- merge(score, meta, by.x = "row.names", by.y = "barcode")
+
+# Rename the merged column appropriately
+colnames(infercnv_score_patient)[1] <- "barcode"
+
+
+infercnv_score_patient$barcode <- sub("_.*", "", infercnv_score_patient$barcode)
+
+# Check the result
+head(infercnv_score_patient)
+
+
+# Export the new dataframe to a CSV file
+write.csv(infercnv_score_patient, "./outs/infercnv_score_patient.csv", row.names = FALSE)
+
+
+
+# Normalize the cnv_score by subtracting 10000
+infercnv_score_patient$cnv_score_scaled <- (infercnv_score_patient$cnv_score - 10000)/100
+
+# Check the result
+head(infercnv_score_patient)
+```
+
+```{r}
+library(sceasy)
+library(reticulate)
+DefaultAssay(All.merge) <- "RNA"
+sceasy::convertFormat(All.merge, from="seurat", to="anndata",
+                       outFile='./data/integrated_till_0712/epi_infercnv_clustered.h5ad')
+```
+
+```{r}
+#annotate
+All.merge@active.ident <- factor(All.merge$infercnv_subcluster)
+
+malignant_low <- c("0_s1",  "1_s9",  "5_s4",  "5_s15", "12_s8", "9_s1",  "2_s30", "3_s6",  "12_s6", "12_s3", "10_s3", "3_s5", "3_s1",  "12_s1", "5_s14", "3_s3",  "10_s4", "10_s8", "1_s17")
+
+All.merge@meta.data$epi_sub <-ifelse(All.merge@active.ident  %in% malignant_low ,'malignant_low','malignant_high')
+
+```
+

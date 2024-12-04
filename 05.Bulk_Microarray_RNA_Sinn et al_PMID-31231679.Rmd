@@ -1,0 +1,1032 @@
+---
+title: "GSE124647"
+output: html_document
+date: "2024-09-17"
+---
+
+```{r}
+# Load necessary libraries
+library(GSVA)
+library(GSEABase)
+library(pheatmap)
+rm(list=ls())
+```
+
+```{r}
+# Load necessary libraries
+library(GSVA)
+library(GSEABase)
+library(pheatmap)
+library(RColorBrewer)
+library(viridis)
+load("/Volumes/Fengshuo_14T/Lab/Yunfeng/cancer_comparsions/Zenodo/data/Bulk_Microarray_Data(published)/PMID-31231679.RData")
+marker <- readRDS("./data/Bulk_Microarray_Data(published)/cell_type_markers_from_scRNA_data_for_estimation.rds")
+# Assuming 'gse124627.clps' is your expression data matrix with genes as rows and samples as columns
+# Assuming 'marker' is your data frame with cell type markers
+# Assuming 'gse124627.ann' is your new sample annotation data frame
+expression_matrix <- gse124627.clps
+
+# Prepare gene names
+rownames(expression_matrix) <- toupper(rownames(expression_matrix))
+
+# Split the marker data into cell types and only keep the top 10 genes per cell type
+cell_type_markers <- split(marker$gene, marker$cluster)
+cell_type_markers <- lapply(cell_type_markers, function(genes) {
+  toupper(genes[1:min(10, length(genes))])  # Keep top 10 genes
+})
+
+# Run ssGSEA to calculate enrichment scores using all cell types
+ssgsea_scores_all <- gsva(expression_matrix, cell_type_markers, method='ssgsea', ssgsea.norm=TRUE)
+
+# Specify cell types to keep
+cell_types_to_keep <- c("pro Mono", "CD14hi Mono", "CD16hi Mono", "OC", "Mφ", "CD4 Treg", "CD8 Tex")
+
+# Trim whitespace from row names and filter the ssGSEA scores
+rownames(ssgsea_scores_all) <- trimws(rownames(ssgsea_scores_all))
+cell_types_to_keep <- trimws(cell_types_to_keep)
+ssgsea_scores_filtered <- ssgsea_scores_all[cell_types_to_keep, , drop=FALSE]
+
+# Reorder the samples based on new sample annotation 'gse124627.ann'
+common_samples <- intersect(colnames(ssgsea_scores_filtered), rownames(gse124627.ann))
+gse124627.ann <- gse124627.ann[common_samples, ]
+ssgsea_scores_filtered <- ssgsea_scores_filtered[, common_samples]
+
+# Scale the data after filtering
+ssgsea_scores_scaled <- t(scale(t(ssgsea_scores_filtered)))
+
+# Create ranges for PFS and oas.months and convert them to factors
+gse124627.ann$PFS <- cut(as.numeric(gse124627.ann$PFS), breaks=c(0, 5, 10, 15, 20, 25, 30, 100), include.lowest=TRUE)
+gse124627.ann$oas.months <- cut(as.numeric(gse124627.ann$oas.months), breaks=c(0, 5, 10, 15, 20, 40, 60, 80, 100, 120, 140), include.lowest=TRUE)
+
+# Make sure PFS and oas.months are factors
+gse124627.ann$PFS <- as.factor(gse124627.ann$PFS)
+gse124627.ann$oas.months <- as.factor(gse124627.ann$oas.months)
+
+# Generate heatmap
+# Adjust the scale range to -1.5 to 1.5
+breaks <- seq(-1.5, 1.5, length.out = 100)
+
+# Create annotations for the samples (Met.Site and other annotations)
+sample_annotations <- data.frame(Met.Site = gse124627.ann$site, 
+                                 PFS = gse124627.ann$PFS, 
+                                 oas.months = gse124627.ann$oas.months)
+rownames(sample_annotations) <- rownames(gse124627.ann)
+
+# Generate color palette for Met.Site based on the number of unique values
+unique_met_sites <- unique(gse124627.ann$site)
+num_met_sites <- length(unique_met_sites)
+
+# Check if num_met_sites is greater than 10, if so, generate more colors
+met_site_colors <- if (num_met_sites > 10) {
+  colorRampPalette(brewer.pal(9, "Paired"))(num_met_sites)  # Generate more colors if needed
+} else {
+  brewer.pal(10, "Paired")
+}
+
+# Assign colors for each unique Met.Site
+names(met_site_colors) <- unique_met_sites
+
+# Generate colors for PFS and oas.months with reversed color gradients
+pfs_colors <- viridis_pal(option = "inferno", direction = -1)(length(levels(gse124627.ann$PFS)))  # Reverse inferno
+oas_colors <- viridis_pal(option = "viridis", direction = -1)(length(levels(gse124627.ann$oas.months)))  # Reverse viridis
+
+# Specify color palettes for annotations
+annotation_colors <- list(
+  Met.Site = met_site_colors,  # Custom palette for Met.Site
+  PFS = setNames(pfs_colors, levels(gse124627.ann$PFS)),  # Ensure colors match PFS factor levels with reversed inferno
+  oas.months = setNames(oas_colors, levels(gse124627.ann$oas.months))  # Ensure colors match oas.months factor levels with reversed viridis
+)
+
+# Generate the heatmap with annotations and custom color palettes
+pheatmap(ssgsea_scores_scaled,
+         breaks = breaks,
+         clustering_distance_rows = 'correlation',
+         clustering_distance_cols = 'correlation',
+         clustering_method = 'complete',
+         show_colnames = TRUE,
+         show_rownames = TRUE,
+         cluster_rows = F,
+         cluster_cols = TRUE,
+         fontsize_row = 10,
+         fontsize_col = 10,
+         annotation_col = sample_annotations,
+         annotation_colors = annotation_colors)
+
+
+```
+
+```{r}
+# Load necessary libraries
+library(GSVA)
+library(GSEABase)
+library(pheatmap)
+library(RColorBrewer)
+library(viridis)
+load("~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Human_Bone_Mets_Comparsion_scRNA/Additional human metastasis datasets/Bulk_Microarray/data/Breast - GSE124647.RData")
+# Assuming 'gse124627.clps' is your expression data matrix with genes as rows and samples as columns
+# Assuming 'marker' is your data frame with cell type markers
+# Assuming 'gse124627.ann' is your new sample annotation data frame
+expression_matrix <- gse124627.clps
+
+# Prepare gene names
+rownames(expression_matrix) <- toupper(rownames(expression_matrix))
+
+# Split the marker data into cell types and only keep the top 10 genes per cell type
+cell_type_markers <- split(marker$gene, marker$cluster)
+cell_type_markers <- lapply(cell_type_markers, function(genes) {
+  toupper(genes[1:min(20, length(genes))])  # Keep top 10 genes
+})
+
+# Run ssGSEA to calculate enrichment scores using all cell types
+ssgsea_scores_all <- gsva(expression_matrix, cell_type_markers, method='ssgsea', ssgsea.norm=TRUE)
+
+# Specify cell types to keep
+cell_types_to_keep <- c("pro Mono", "CD14hi Mono", "CD16hi Mono", "OC", "Mφ", "CD4 Treg", "CD8 Tex")
+
+# Trim whitespace from row names and filter the ssGSEA scores by cell types
+rownames(ssgsea_scores_all) <- trimws(rownames(ssgsea_scores_all))
+cell_types_to_keep <- trimws(cell_types_to_keep)
+ssgsea_scores_filtered <- ssgsea_scores_all[cell_types_to_keep, , drop=FALSE]
+
+
+
+# Scale the data after filtering by both cell types and Met.Site
+ssgsea_scores_scaled <- t(scale(t(ssgsea_scores_filtered)))
+
+# Create ranges for PFS and oas.months and convert them to factors
+gse124627.ann$PFS <- cut(as.numeric(gse124627.ann$PFS), breaks=c(0, 5, 10, 15, 20, 25, 30, 100), include.lowest=TRUE)
+gse124627.ann$oas.months <- cut(as.numeric(gse124627.ann$oas.months), breaks=c(0, 5, 10, 15, 20, 40, 60, 80, 100, 120, 140), include.lowest=TRUE)
+
+# Make sure PFS and oas.months are factors
+gse124627.ann$PFS <- as.factor(gse124627.ann$PFS)
+gse124627.ann$oas.months <- as.factor(gse124627.ann$oas.months)
+
+# Generate heatmap
+# Adjust the scale range to -1.5 to 1.5
+breaks <- seq(-1.5, 1.5, length.out = 100)
+
+# Create annotations for the samples (Met.Site and other annotations)
+sample_annotations <- data.frame(Met.Site = gse124627.ann$site, 
+                                 PFS = gse124627.ann$PFS, 
+                                 oas.months = gse124627.ann$oas.months)
+rownames(sample_annotations) <- rownames(gse124627.ann)
+
+# Generate color palette for Met.Site based on the number of unique values
+unique_met_sites <- unique(gse124627.ann$site)
+num_met_sites <- length(unique_met_sites)
+
+# Check if num_met_sites is greater than 10, if so, generate more colors
+met_site_colors <- if (num_met_sites > 10) {
+  colorRampPalette(brewer.pal(9, "Paired"))(num_met_sites)  # Generate more colors if needed
+} else {
+  brewer.pal(10, "Paired")
+}
+
+# Assign colors for each unique Met.Site
+names(met_site_colors) <- unique_met_sites
+
+# Generate colors for PFS and oas.months with reversed color gradients
+pfs_colors <- viridis_pal(option = "inferno", direction = -1)(length(levels(gse124627.ann$PFS)))  # Reverse inferno
+oas_colors <- viridis_pal(option = "viridis", direction = -1)(length(levels(gse124627.ann$oas.months)))  # Reverse viridis
+
+# Specify color palettes for annotations
+annotation_colors <- list(
+  Met.Site = met_site_colors,  # Custom palette for Met.Site
+  PFS = setNames(pfs_colors, levels(gse124627.ann$PFS)),  # Ensure colors match PFS factor levels with reversed inferno
+  oas.months = setNames(oas_colors, levels(gse124627.ann$oas.months))  # Ensure colors match oas.months factor levels with reversed viridis
+)
+
+# Generate the heatmap with annotations and custom color palettes
+pheatmap(ssgsea_scores_scaled,
+         breaks = breaks,
+         clustering_distance_rows = 'correlation',
+         clustering_distance_cols = 'correlation',
+         clustering_method = 'average',
+         show_colnames = TRUE,
+         show_rownames = TRUE,
+         cluster_rows = F,
+         cluster_cols = TRUE,
+         fontsize_row = 10,
+         fontsize_col = 10,
+         annotation_col = sample_annotations,
+         annotation_colors = annotation_colors)
+
+```
+
+
+```{r}
+# Load necessary libraries
+library(GSVA)
+library(GSEABase)
+library(pheatmap)
+library(RColorBrewer)
+library(viridis)
+
+# Load necessary libraries
+load("~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Human_Bone_Mets_Comparsion_scRNA/Additional human metastasis datasets/Bulk_Microarray/data/Breast - GSE124647.RData")
+
+# Assuming 'gse124627.clps' is your expression data matrix with genes as rows and samples as columns
+# Assuming 'marker' is your data frame with cell type markers
+# Assuming 'gse124627.ann' is your new sample annotation data frame
+expression_matrix <- gse124627.clps
+
+# Prepare gene names
+rownames(expression_matrix) <- toupper(rownames(expression_matrix))
+
+# Split the marker data into cell types and only keep the top 10 genes per cell type
+cell_type_markers <- split(marker$gene, marker$cluster)
+cell_type_markers <- lapply(cell_type_markers, function(genes) {
+  toupper(genes[1:min(10, length(genes))])  # Keep top 10 genes
+})
+
+# Run ssGSEA to calculate enrichment scores using all cell types
+ssgsea_scores_all <- gsva(expression_matrix, cell_type_markers, method='ssgsea', ssgsea.norm=TRUE)
+
+# Reorder the samples based on new sample annotation 'gse124627.ann'
+common_samples <- intersect(colnames(ssgsea_scores_all), rownames(gse124627.ann))
+gse124627.ann <- gse124627.ann[common_samples, ]
+ssgsea_scores_all <- ssgsea_scores_all[, common_samples]
+
+# Scale the data
+ssgsea_scores_scaled <- t(scale(t(ssgsea_scores_all)))
+
+# Create ranges for PFS and oas.months and convert them to factors
+gse124627.ann$PFS <- cut(as.numeric(gse124627.ann$PFS), breaks=c(0, 5, 10, 15, 20, 25, 30, 100), include.lowest=TRUE)
+gse124627.ann$oas.months <- cut(as.numeric(gse124627.ann$oas.months), breaks=c(0, 5, 10, 15, 20, 40, 60, 80, 100, 120, 140), include.lowest=TRUE)
+
+# Make sure PFS and oas.months are factors
+gse124627.ann$PFS <- as.factor(gse124627.ann$PFS)
+gse124627.ann$oas.months <- as.factor(gse124627.ann$oas.months)
+
+# Generate heatmap
+# Adjust the scale range to -1.5 to 1.5
+breaks <- seq(-1.5, 1.5, length.out = 100)
+
+# Create annotations for the samples (Met.Site and other annotations)
+sample_annotations <- data.frame(Met.Site = gse124627.ann$site, 
+                                 PFS = gse124627.ann$PFS, 
+                                 oas.months = gse124627.ann$oas.months)
+rownames(sample_annotations) <- rownames(gse124627.ann)
+
+# Generate color palette for Met.Site based on the number of unique values
+unique_met_sites <- unique(gse124627.ann$site)
+num_met_sites <- length(unique_met_sites)
+
+# Check if num_met_sites is greater than 10, if so, generate more colors
+met_site_colors <- if (num_met_sites > 10) {
+  colorRampPalette(brewer.pal(9, "Paired"))(num_met_sites)  # Generate more colors if needed
+} else {
+  brewer.pal(10, "Paired")
+}
+
+# Assign colors for each unique Met.Site
+names(met_site_colors) <- unique_met_sites
+
+# Generate colors for PFS and oas.months
+pfs_colors <- viridis_pal(option = "inferno",direction = -1)(length(levels(gse124627.ann$PFS)))
+oas_colors <- viridis_pal(option = "viridis",direction = -1)(length(levels(gse124627.ann$oas.months)))
+
+# Specify color palettes for annotations
+annotation_colors <- list(
+  Met.Site = met_site_colors,  # Custom palette for Met.Site
+  PFS = setNames(pfs_colors, levels(gse124627.ann$PFS)),  # Ensure colors match PFS factor levels
+  oas.months = setNames(oas_colors, levels(gse124627.ann$oas.months))  # Ensure colors match oas.months factor levels
+)
+
+# Generate the heatmap with annotations and custom color palettes
+pheatmap(ssgsea_scores_scaled,
+         breaks = breaks,
+         clustering_distance_rows = 'correlation',
+         clustering_distance_cols = 'correlation',
+         clustering_method = 'complete',
+         show_colnames = TRUE,
+         show_rownames = TRUE,
+         cluster_rows = TRUE,
+         cluster_cols = TRUE,
+         fontsize_row = 10,
+         fontsize_col = 10,
+         annotation_col = sample_annotations,
+         annotation_colors = annotation_colors)
+```
+
+```{r}
+# Load necessary libraries
+library(GSVA)
+library(GSEABase)
+library(pheatmap)
+library(RColorBrewer)
+library(viridis)
+load("~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Human_Bone_Mets_Comparsion_scRNA/Additional human metastasis datasets/Bulk_Microarray/data/Breast - GSE124647.RData")
+# Assuming 'gse124627.clps' is your expression data matrix with genes as rows and samples as columns
+# Assuming 'marker' is your data frame with cell type markers
+# Assuming 'gse124627.ann' is your new sample annotation data frame
+expression_matrix <- gse124627.clps
+
+# Prepare gene names
+rownames(expression_matrix) <- toupper(rownames(expression_matrix))
+
+# Split the marker data into cell types and only keep the top 10 genes per cell type
+cell_type_markers <- split(marker$gene, marker$cluster)
+cell_type_markers <- lapply(cell_type_markers, function(genes) {
+  toupper(genes[1:min(10, length(genes))])  # Keep top 10 genes
+})
+
+# Run ssGSEA to calculate enrichment scores using all cell types
+ssgsea_scores_all <- gsva(expression_matrix, cell_type_markers, method='ssgsea', ssgsea.norm=TRUE)
+
+# Specify cell types to keep
+cell_types_to_keep <- c("pro Mono", "CD14hi Mono", "CD16hi Mono", "OC", "Mφ", "CD4 Treg", "CD8 Tex")
+
+# Trim whitespace from row names and filter the ssGSEA scores by cell types
+rownames(ssgsea_scores_all) <- trimws(rownames(ssgsea_scores_all))
+cell_types_to_keep <- trimws(cell_types_to_keep)
+ssgsea_scores_filtered <- ssgsea_scores_all[cell_types_to_keep, , drop=FALSE]
+
+# Now filter by Met.Site for only samples where Met.Site is "Bone"
+samples_to_keep <- rownames(gse124627.ann)[gse124627.ann$site == "Bone"]
+
+# Reorder and filter the samples based on the filtered Met.Site and common samples
+common_samples <- intersect(colnames(ssgsea_scores_filtered), samples_to_keep)
+gse124627.ann <- gse124627.ann[common_samples, ]
+ssgsea_scores_filtered <- ssgsea_scores_filtered[, common_samples]
+
+# Scale the data after filtering by both cell types and Met.Site
+ssgsea_scores_scaled <- t(scale(t(ssgsea_scores_filtered)))
+
+# Create ranges for PFS and oas.months and convert them to factors
+gse124627.ann$PFS <- cut(as.numeric(gse124627.ann$PFS), breaks=c(0, 5, 10, 15, 20, 25, 30, 100), include.lowest=TRUE)
+gse124627.ann$oas.months <- cut(as.numeric(gse124627.ann$oas.months), breaks=c(0, 5, 10, 15, 20, 40, 60, 80, 100, 120, 140), include.lowest=TRUE)
+
+# Make sure PFS and oas.months are factors
+gse124627.ann$PFS <- as.factor(gse124627.ann$PFS)
+gse124627.ann$oas.months <- as.factor(gse124627.ann$oas.months)
+
+# Generate heatmap
+# Adjust the scale range to -1.5 to 1.5
+breaks <- seq(-1.5, 1.5, length.out = 100)
+
+# Create annotations for the samples (Met.Site and other annotations)
+sample_annotations <- data.frame(Met.Site = gse124627.ann$site, 
+                                 PFS = gse124627.ann$PFS, 
+                                 oas.months = gse124627.ann$oas.months)
+rownames(sample_annotations) <- rownames(gse124627.ann)
+
+# Generate color palette for Met.Site based on the number of unique values
+unique_met_sites <- unique(gse124627.ann$site)
+num_met_sites <- length(unique_met_sites)
+
+# Check if num_met_sites is greater than 10, if so, generate more colors
+met_site_colors <- if (num_met_sites > 10) {
+  colorRampPalette(brewer.pal(9, "Paired"))(num_met_sites)  # Generate more colors if needed
+} else {
+  brewer.pal(10, "Paired")
+}
+
+# Assign colors for each unique Met.Site
+names(met_site_colors) <- unique_met_sites
+
+# Generate colors for PFS and oas.months with reversed color gradients
+pfs_colors <- viridis_pal(option = "inferno", direction = -1)(length(levels(gse124627.ann$PFS)))  # Reverse inferno
+oas_colors <- viridis_pal(option = "viridis", direction = -1)(length(levels(gse124627.ann$oas.months)))  # Reverse viridis
+
+# Specify color palettes for annotations
+annotation_colors <- list(
+  Met.Site = met_site_colors,  # Custom palette for Met.Site
+  PFS = setNames(pfs_colors, levels(gse124627.ann$PFS)),  # Ensure colors match PFS factor levels with reversed inferno
+  oas.months = setNames(oas_colors, levels(gse124627.ann$oas.months))  # Ensure colors match oas.months factor levels with reversed viridis
+)
+
+# Generate the heatmap with annotations and custom color palettes
+pheatmap(ssgsea_scores_scaled,
+         breaks = breaks,
+         clustering_distance_rows = 'correlation',
+         clustering_distance_cols = 'correlation',
+         clustering_method = 'average',
+         show_colnames = TRUE,
+         show_rownames = TRUE,
+         cluster_rows = F,
+         cluster_cols = TRUE,
+         fontsize_row = 10,
+         fontsize_col = 10,
+         annotation_col = sample_annotations,
+         annotation_colors = annotation_colors)
+
+```
+
+
+```{r}
+# Load necessary libraries
+library(GSVA)
+library(GSEABase)
+library(pheatmap)
+library(RColorBrewer)
+library(viridis)
+
+# Assuming 'gse124627.clps' is your expression data matrix with genes as rows and samples as columns
+# Assuming 'marker' is your data frame with cell type markers
+load("~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Human_Bone_Mets_Comparsion_scRNA/Additional human metastasis datasets/Bulk_Microarray/data/Breast - GSE124647.RData")
+# Assuming 'gse124627.ann' is your new sample annotation data frame
+expression_matrix <- gse124627.clps
+
+# Prepare gene names
+rownames(expression_matrix) <- toupper(rownames(expression_matrix))
+
+# Split the marker data into cell types and only keep the top 10 genes per cell type
+cell_type_markers <- split(marker$gene, marker$cluster)
+cell_type_markers <- lapply(cell_type_markers, function(genes) {
+  toupper(genes[1:min(10, length(genes))])  # Keep top 10 genes
+})
+
+# Run ssGSEA to calculate enrichment scores using all cell types
+ssgsea_scores_all <- gsva(expression_matrix, cell_type_markers, method='ssgsea', ssgsea.norm=TRUE)
+
+# Filter the samples to include only those where Met.Site is "Bone"
+bone_samples <- rownames(gse124627.ann)[gse124627.ann$site == "Bone"]
+common_samples <- intersect(colnames(ssgsea_scores_all), bone_samples)
+gse124627.ann <- gse124627.ann[common_samples, ]
+ssgsea_scores_filtered <- ssgsea_scores_all[, common_samples]
+
+# Scale the data after filtering
+ssgsea_scores_scaled <- t(scale(t(ssgsea_scores_filtered)))
+
+# Create ranges for PFS and oas.months and convert them to factors
+gse124627.ann$PFS <- cut(as.numeric(gse124627.ann$PFS), breaks=c(0, 5, 10, 15, 20, 25, 30, 100), include.lowest=TRUE)
+gse124627.ann$oas.months <- cut(as.numeric(gse124627.ann$oas.months), breaks=c(0, 5, 10, 15, 20, 40, 60, 80, 100, 120, 140), include.lowest=TRUE)
+
+# Make sure PFS and oas.months are factors
+gse124627.ann$PFS <- as.factor(gse124627.ann$PFS)
+gse124627.ann$oas.months <- as.factor(gse124627.ann$oas.months)
+
+# Generate heatmap
+# Adjust the scale range to -1.5 to 1.5
+breaks <- seq(-0.5, 1.5, length.out = 100)
+
+# Create annotations for the samples (Met.Site and other annotations)
+sample_annotations <- data.frame(Met.Site = gse124627.ann$site, 
+                                 PFS = gse124627.ann$PFS, 
+                                 oas.months = gse124627.ann$oas.months)
+rownames(sample_annotations) <- rownames(gse124627.ann)
+
+# Generate color palette for Met.Site based on the number of unique values
+unique_met_sites <- unique(gse124627.ann$site)
+num_met_sites <- length(unique_met_sites)
+
+# Check if num_met_sites is greater than 10, if so, generate more colors
+met_site_colors <- if (num_met_sites > 10) {
+  colorRampPalette(brewer.pal(9, "Paired"))(num_met_sites)  # Generate more colors if needed
+} else {
+  brewer.pal(10, "Paired")
+}
+
+# Assign colors for each unique Met.Site
+names(met_site_colors) <- unique_met_sites
+
+# Generate colors for PFS and oas.months with reversed color gradients
+pfs_colors <- viridis_pal(option = "inferno", direction = -1)(length(levels(gse124627.ann$PFS)))  # Reverse inferno
+oas_colors <- viridis_pal(option = "viridis", direction = -1)(length(levels(gse124627.ann$oas.months)))  # Reverse viridis
+
+# Specify color palettes for annotations
+annotation_colors <- list(
+  Met.Site = met_site_colors,  # Custom palette for Met.Site
+  PFS = setNames(pfs_colors, levels(gse124627.ann$PFS)),  # Ensure colors match PFS factor levels with reversed inferno
+  oas.months = setNames(oas_colors, levels(gse124627.ann$oas.months))  # Ensure colors match oas.months factor levels with reversed viridis
+)
+
+pdf("../../../Human_Bone_Mets_Comparsion_scRNA/Additional human metastasis datasets/Bulk_Microarray/outs/GSE_124647_selected_heatmap.pdf", width = 6, height = 8)  # Adjust width and height as needed
+# Generate the heatmap with annotations and custom color palettes
+pheatmap(ssgsea_scores_scaled,
+         breaks = breaks,
+         #scale = "column",
+         clustering_distance_rows = 'correlation',
+         clustering_distance_cols = 'correlation',
+         clustering_method = 'complete',
+         show_colnames = TRUE,
+         show_rownames = TRUE,
+         cluster_rows = TRUE,
+         cluster_cols = TRUE,
+         fontsize_row = 10,
+         fontsize_col = 10,
+         annotation_col = sample_annotations,
+         annotation_colors = annotation_colors)
+dev.off()
+```
+
+
+```{r}
+# Load necessary libraries
+library(GSVA)
+library(GSEABase)
+library(pheatmap)
+library(RColorBrewer)
+library(viridis)
+
+# Assuming 'gse124627.clps' is your expression data matrix with genes as rows and samples as columns
+# Assuming 'marker' is your data frame with cell type markers
+load("~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Human_Bone_Mets_Comparsion_scRNA/Additional human metastasis datasets/Bulk_Microarray/data/Breast - GSE124647.RData")
+# Assuming 'gse124627.ann' is your new sample annotation data frame
+expression_matrix <- gse124627.clps
+
+# Load necessary libraries
+library(survival)
+library(survminer)
+
+# Filter the annotation and expression matrix to include only samples where Met.Site is "Bone"
+bone_samples <- rownames(gse124627.ann)[gse124627.ann$site == "Bone"]
+gse124627.ann_bone <- gse124627.ann[bone_samples, ]
+expression_matrix_bone <- expression_matrix[, bone_samples]
+
+# Extract the markers for both "CD4 Treg" and "CD8 Tex"
+cd4_treg_markers <- cell_type_markers[["CD4 Treg"]]
+cd8_tex_markers <- cell_type_markers[["CD8 Tex"]]
+
+# Combine the markers for CD4 Treg and CD8 Tex
+combined_markers <- union(cd4_treg_markers, cd8_tex_markers)
+
+# Filter the expression matrix to include only these genes
+expression_matrix_filtered <- expression_matrix_bone[rownames(expression_matrix_bone) %in% combined_markers, ]
+
+# Create an average expression score for each sample based on the combined markers
+expression_score <- colMeans(expression_matrix_filtered)
+
+# Add the expression score to the annotation data
+gse124627.ann_bone$expression_score <- expression_score
+
+# Create a binary classification based on median expression
+gse124627.ann_bone$high_expression <- ifelse(gse124627.ann_bone$expression_score > median(gse124627.ann_bone$expression_score), "High", "Low")
+
+# 1. Draw the survival curve for PFS
+surv_object_pfs <- Surv(time = gse124627.ann_bone$PFS, event = gse124627.ann_bone$PFS.event)
+fit_pfs <- survfit(surv_object_pfs ~ high_expression, data = gse124627.ann_bone)
+
+# Plot the PFS survival curve
+ggsurvplot(fit_pfs, data = gse124627.ann_bone, pval = TRUE,
+           title = "PFS Survival Curve based on CD4 Treg and CD8 Tex Markers",
+           xlab = "Time (Months)", ylab = "Survival Probability")
+
+# 2. Draw the survival curve for oas.months
+surv_object_oas <- Surv(time = gse124627.ann_bone$oas.months, event = gse124627.ann_bone$os.event)
+fit_oas <- survfit(surv_object_oas ~ high_expression, data = gse124627.ann_bone)
+
+# Plot the OAS survival curve
+ggsurvplot(fit_oas, data = gse124627.ann_bone, pval = TRUE,
+           title = "Overall Survival Curve (OAS) based on CD4 Treg and CD8 Tex Markers",
+           xlab = "Time (Months)", ylab = "Survival Probability")
+
+```
+
+```{r}
+# Load necessary libraries
+library(GSVA)
+library(GSEABase)
+library(pheatmap)
+library(RColorBrewer)
+library(viridis)
+rm(list = ls())
+# Assuming 'gse124627.clps' is your expression data matrix with genes as rows and samples as columns
+# Assuming 'marker' is your data frame with cell type markers
+load("~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Human_Bone_Mets_Comparsion_scRNA/Additional human metastasis datasets/Bulk_Microarray/data/Breast - GSE124647.RData")
+marker <- readRDS("~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Human_Bone_Mets_Comparsion_scRNA/Additional human metastasis datasets/Bulk_Microarray/data/markers_from_scRNA.rds")
+# Assuming 'gse124627.ann' is your new sample annotation data frame
+expression_matrix <- gse124627.clps
+# Split the marker data into cell types and only keep the top 10 genes per cell type
+cell_type_markers <- split(marker$gene, marker$cluster)
+cell_type_markers <- lapply(cell_type_markers, function(genes) {
+  toupper(genes[1:min(10, length(genes))])  # Keep top 10 genes
+})
+
+# Load necessary libraries
+library(survival)
+library(survminer)
+library(gridExtra)
+
+# Define the PDF file where plots will be saved
+pdf("./outs/GSE124647_PFS_Survival_Curves.pdf", width = 10, height = 15)
+
+# Get unique Met.Sites
+met_sites <- unique(gse124627.ann$site)
+
+# Extract the markers for both "CD4 Treg" and "CD8 Tex"
+cd4_treg_markers <- cell_type_markers[["CD4 Treg"]]
+cd8_tex_markers <- cell_type_markers[["CD8 Tex"]]
+
+# Combine the markers for CD4 Treg and CD8 Tex
+combined_markers <- union(cd4_treg_markers, cd8_tex_markers)
+
+# Filter the expression matrix to include only these genes
+expression_matrix_filtered <- expression_matrix[rownames(expression_matrix) %in% combined_markers, ]
+
+# Initialize an empty list to store plots
+plot_list <- list()
+
+# Loop through each Met.Site and generate a survival plot for PFS
+for (site in met_sites) {
+  
+  # Filter samples based on Met.Site
+  site_samples <- rownames(gse124627.ann)[gse124627.ann$site == site]
+  gse124627.ann_site <- gse124627.ann[site_samples, ]
+  
+  # Check if there are enough samples for survival analysis
+  if (length(site_samples) < 2) {
+    message(paste("Not enough samples for", site, "skipping..."))
+    next
+  }
+  
+  expression_matrix_site <- expression_matrix_filtered[, site_samples, drop=FALSE]
+  
+  # Check if the filtered matrix has more than one column
+  if (ncol(expression_matrix_site) > 1) {
+    # Create an average expression score for each sample based on the combined markers
+    expression_score <- colMeans(expression_matrix_site)
+  } else {
+    # If only one sample, just use the values directly
+    expression_score <- expression_matrix_site
+  }
+  
+  # Add the expression score to the annotation data
+  gse124627.ann_site$expression_score <- expression_score
+  
+  # Create a binary classification based on median expression
+  gse124627.ann_site$high_expression <- ifelse(gse124627.ann_site$expression_score > median(gse124627.ann_site$expression_score), "High", "Low")
+  
+  # Draw the survival curve for PFS for the current Met.Site
+  surv_object_pfs <- Surv(time = gse124627.ann_site$PFS, event = gse124627.ann_site$PFS.event)
+  fit_pfs <- survfit(surv_object_pfs ~ high_expression, data = gse124627.ann_site)
+  
+  # Generate the PFS survival plot
+  p <- ggsurvplot(fit_pfs, data = gse124627.ann_site, pval = TRUE,
+                title = paste("Survival Curve for BC ", site, "metastasis\n based on CD4 Treg and CD8 Tex Signatures"),
+                xlab = "Time (Months)", ylab = "PFS Probability",
+                pval.size = 4,  # Set the size of the p-value text
+                font.title = c(12, "bold"),  # Set the font size and style for the title
+                font.x = c(8),  # Set the font size for the x-axis label
+                font.y = c(8),  # Set the font size for the y-axis label
+                font.tickslab = c(12))  # Set the font size for the axis tick labels
+
+
+  
+  # Add the plot to the list
+  plot_list[[site]] <- p$plot
+}
+
+# Arrange the plots in a grid layout and save as a one-page PDF
+if (length(plot_list) > 0) {
+  grid.arrange(grobs = plot_list, ncol = 2)  # Adjust ncol to change layout
+}
+
+# Close the PDF device
+dev.off()
+
+
+
+```
+```{r}
+# Load necessary libraries
+library(GSVA)
+library(GSEABase)
+library(pheatmap)
+library(RColorBrewer)
+library(viridis)
+library(survival)
+library(survminer)
+library(gridExtra)
+library(ggplot2)
+
+# Clear the workspace
+rm(list = ls())
+
+# Load expression data and marker information
+load("~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Human_Bone_Mets_Comparsion_scRNA/Additional human metastasis datasets/Bulk_Microarray/data/Breast - GSE124647.RData")
+marker <- readRDS("~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Human_Bone_Mets_Comparsion_scRNA/Additional human metastasis datasets/Bulk_Microarray/data/markers_from_scRNA.rds")
+
+# Assign expression matrix
+expression_matrix <- gse124627.clps
+
+# Split the marker data into cell types and keep the top 10 genes per cell type
+cell_type_markers <- split(marker$gene, marker$cluster)
+cell_type_markers <- lapply(cell_type_markers, function(genes) {
+  toupper(genes[1:min(10, length(genes))])  # Keep top 10 genes
+})
+
+# Define the PDF file where plots will be saved
+pdf("./outs/GSE124647_PFS_Survival_Curves.pdf", width = 10, height = 15)
+
+# Get unique metastatic sites
+met_sites <- unique(gse124627.ann$site)
+
+# Extract the markers for both "CD4 Treg" and "CD8 Tex"
+cd4_treg_markers <- cell_type_markers[["CD4 Treg"]]
+cd8_tex_markers <- cell_type_markers[["CD8 Tex"]]
+
+# Combine the markers for CD4 Treg and CD8 Tex
+combined_markers <- union(cd4_treg_markers, cd8_tex_markers)
+
+# Filter the expression matrix to include only these genes
+expression_matrix_filtered <- expression_matrix[rownames(expression_matrix) %in% combined_markers, ]
+
+# Initialize an empty list to store combined plots and tables
+plot_list <- list()
+
+# Loop through each Met.Site and generate a survival plot for PFS with contingency table
+for (site in met_sites) {
+  
+  # Filter samples based on Met.Site
+  site_samples <- rownames(gse124627.ann)[gse124627.ann$site == site]
+  gse124627.ann_site <- gse124627.ann[site_samples, ]
+  
+  # Check if there are enough samples for survival analysis
+  if (length(site_samples) < 2) {
+    message(paste("Not enough samples for", site, "skipping..."))
+    next
+  }
+  
+  # Filter the expression matrix for the current site
+  expression_matrix_site <- expression_matrix_filtered[, site_samples, drop=FALSE]
+  
+  # Check if the filtered matrix has more than one column
+  if (ncol(expression_matrix_site) > 1) {
+    # Create an average expression score for each sample based on the combined markers
+    expression_score <- colMeans(expression_matrix_site)
+  } else {
+    # If only one sample, use the values directly
+    expression_score <- expression_matrix_site
+  }
+  
+  # Add the expression score to the annotation data
+  gse124627.ann_site$expression_score <- expression_score
+  
+  # Create a binary classification based on median expression
+  median_score <- median(gse124627.ann_site$expression_score, na.rm = TRUE)
+  gse124627.ann_site$high_expression <- ifelse(gse124627.ann_site$expression_score > median_score, "High", "Low")
+  
+  # Handle NA values in high_expression
+  gse124627.ann_site$high_expression[is.na(gse124627.ann_site$high_expression)] <- "Low"
+  
+  # Generate the contingency table
+  contingency_table <- table(
+    High_Expression = gse124627.ann_site$high_expression,
+    PFS_Event = gse124627.ann_site$PFS.event
+  )
+  
+  # Print contingency table for debugging (optional)
+  # print(paste("Contingency Table for", site))
+  # print(contingency_table)
+  
+  # Draw the survival curve for PFS for the current Met.Site
+  surv_object_pfs <- Surv(time = gse124627.ann_site$PFS, event = gse124627.ann_site$PFS.event)
+  fit_pfs <- survfit(surv_object_pfs ~ high_expression, data = gse124627.ann_site)
+  
+  # Generate the PFS survival plot
+  p <- ggsurvplot(
+    fit_pfs, 
+    data = gse124627.ann_site, 
+    pval = TRUE,
+    title = NULL,  # Remove the title
+    subtitle = paste("Metastatic Site:", site),
+    xlab = "Time (Months)", 
+    ylab = "PFS Probability",
+    pval.size = 4,  # Size of the p-value text
+    font.title = c(12, "bold"),  # Font size and style for the title
+    font.subtitle = c(10, "italic"),  # Font size and style for the subtitle
+    font.x = c(8),  # Font size for the x-axis label
+    font.y = c(8),  # Font size for the y-axis label
+    font.tickslab = c(10),  # Font size for the axis tick labels
+    legend.title = "Expression Level",
+    legend.labs = c("High", "Low"),
+    legend = "right",
+    risk.table = FALSE,
+    ncensor.plot = FALSE,
+    ggtheme = theme_minimal(),
+    palette = c("#E7B800", "#2E9FDF"),  # Custom colors for High and Low
+    size = 1,
+    alpha = 0.8,
+    break.time.by = 5,
+    surv.median.line = "hv",  # Add horizontal and vertical lines at median survival
+    show = FALSE
+  )
+  
+  # Create a ggplot object for the contingency table
+  # Convert the table to a data frame for ggplot
+  contingency_df <- as.data.frame.matrix(contingency_table)
+  contingency_df$High_Expression <- rownames(contingency_df)
+  
+  # Melt the data frame for ggplot
+  library(reshape2)
+  contingency_melt <- melt(contingency_df, id.vars = "High_Expression", variable.name = "PFS_Event", value.name = "Count")
+  
+  # Create the contingency table plot
+  table_plot <- ggplot(contingency_melt, aes(x = PFS_Event, y = High_Expression, fill = Count)) +
+    geom_tile(color = "white") +
+    geom_text(aes(label = Count), color = "black", size = 4) +
+    scale_fill_gradient(low = "white", high = "steelblue") +
+    labs(title = "Contingency Table",
+         x = "PFS Event",
+         y = "Expression Level") +
+    theme_minimal() +
+    theme(
+      plot.title = element_text(size = 10, face = "bold"),
+      axis.title = element_text(size = 8),
+      axis.text = element_text(size = 8),
+      legend.position = "none"  # Hide the fill legend
+    )
+  
+  # Combine the survival plot and contingency table vertically
+  combined_plot <- arrangeGrob(
+    p$plot, 
+    table_plot, 
+    ncol = 1, 
+    heights = c(3, 1)  # Adjust heights as needed
+  )
+  
+  # Add the combined plot to the list
+  plot_list[[site]] <- combined_plot
+}
+
+# Arrange all combined plots in a grid layout and save as a single-page PDF
+if (length(plot_list) > 0) {
+  # Determine the number of columns based on the number of plots
+  num_cols <- 2
+  num_rows <- ceiling(length(plot_list) / num_cols)
+  
+  # Arrange the plots
+  grid_arranged <- marrangeGrob(
+    grobs = plot_list, 
+    nrow = num_rows, 
+    ncol = num_cols, 
+    top = "PFS Survival Curves with Contingency Tables"
+  )
+  
+  # Print the arranged plots to the PDF
+  print(grid_arranged)
+}
+
+# Close the PDF device
+dev.off()
+
+```
+```{r}
+# Load necessary libraries
+library(GSVA)
+library(GSEABase)
+library(pheatmap)
+library(RColorBrewer)
+library(viridis)
+library(survival)
+library(survminer)
+library(gridExtra)
+library(ggplot2)
+library(reshape2)
+
+# Clear the workspace
+rm(list = ls())
+
+# Load expression data and marker information
+load("~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Human_Bone_Mets_Comparsion_scRNA/Additional human metastasis datasets/Bulk_Microarray/data/Breast - GSE124647.RData")
+marker <- readRDS("~/Library/CloudStorage/OneDrive-BaylorCollegeofMedicine/Human_Bone_Mets_Comparsion_scRNA/Additional human metastasis datasets/Bulk_Microarray/data/markers_from_scRNA.rds")
+
+# Assign expression matrix
+expression_matrix <- gse124627.clps
+
+# Split the marker data into cell types and keep the top 10 genes per cell type
+cell_type_markers <- split(marker$gene, marker$cluster)
+cell_type_markers <- lapply(cell_type_markers, function(genes) {
+  toupper(genes[1:min(10, length(genes))])  # Keep top 10 genes
+})
+
+# Define the PDF file where plots will be saved
+#pdf("../../../Human_Bone_Mets_Comparsion_scRNA/Additional human metastasis datasets/Bulk_Microarray/outs/GSE124647_PFS_Survival_Curves_with_Contingency_Tables.pdf", width = 10, height = 15)
+
+# Get unique metastatic sites
+met_sites <- unique(gse124627.ann$site)
+
+# Extract the markers for both "CD4 Treg" and "CD8 Tex"
+cd4_treg_markers <- cell_type_markers[["CD4 Treg"]]
+cd8_tex_markers <- cell_type_markers[["CD8 Tex"]]
+
+# Combine the markers for CD4 Treg and CD8 Tex
+combined_markers <- union(cd4_treg_markers, cd8_tex_markers)
+
+# Filter the expression matrix to include only these genes
+expression_matrix_filtered <- expression_matrix[rownames(expression_matrix) %in% combined_markers, ]
+
+# Initialize an empty list to store combined plots and tables
+plot_list <- list()
+
+# Loop through each Met.Site and generate a survival plot for PFS with contingency table
+for (site in met_sites) {
+  
+  # Filter samples based on Met.Site
+  site_samples <- rownames(gse124627.ann)[gse124627.ann$site == site]
+  gse124627.ann_site <- gse124627.ann[site_samples, ]
+  
+  # Check if there are enough samples for survival analysis
+  if (length(site_samples) < 2) {
+    message(paste("Not enough samples for", site, "skipping..."))
+    next
+  }
+  
+  # Filter the expression matrix for the current site
+  expression_matrix_site <- expression_matrix_filtered[, site_samples, drop=FALSE]
+  
+  # Check if the filtered matrix has more than one column
+  if (ncol(expression_matrix_site) > 1) {
+    # Create an average expression score for each sample based on the combined markers
+    expression_score <- colMeans(expression_matrix_site)
+  } else {
+    # If only one sample, use the values directly
+    expression_score <- expression_matrix_site
+  }
+  
+  # Add the expression score to the annotation data
+  gse124627.ann_site$expression_score <- expression_score
+  
+  # Create a binary classification based on median expression
+  median_score <- median(gse124627.ann_site$expression_score, na.rm = TRUE)
+  gse124627.ann_site$high_expression <- ifelse(gse124627.ann_site$expression_score > median_score, "High", "Low")
+  
+  # Handle NA values in high_expression
+  gse124627.ann_site$high_expression[is.na(gse124627.ann_site$high_expression)] <- "Low"
+  
+  # Calculate statistics for the contingency table
+  # Number of samples in each group
+  count_table <- table(gse124627.ann_site$high_expression)
+  
+  # Probability that PFS > 12 months
+  prob_pfs_12 <- tapply(gse124627.ann_site$PFS > 12, gse124627.ann_site$high_expression, mean, na.rm = TRUE)
+  
+  # Create a data frame for the contingency table
+  contingency_df <- data.frame(
+    Group = names(count_table),
+    Count = as.integer(count_table),
+    Total = as.integer(count_table),  # Total is the same as count
+    `PFS > 12 Months Probability` = round(prob_pfs_12, 2)
+  )
+  
+  # Draw the survival curve for PFS for the current Met.Site
+  surv_object_pfs <- Surv(time = gse124627.ann_site$PFS, event = gse124627.ann_site$PFS.event)
+  fit_pfs <- survfit(surv_object_pfs ~ high_expression, data = gse124627.ann_site)
+  
+  # Generate the PFS survival plot
+  p <- ggsurvplot(
+    fit_pfs, 
+    data = gse124627.ann_site, 
+    pval = TRUE,
+    title = NULL,  # Remove the title
+    subtitle = paste("Metastatic Site:", site),
+    xlab = "Time (Months)", 
+    ylab = "PFS Probability",
+    pval.size = 4,  # Size of the p-value text
+    font.title = c(12, "bold"),  # Font size and style for the title
+    font.subtitle = c(10, "italic"),  # Font size and style for the subtitle
+    font.x = c(8),  # Font size for the x-axis label
+    font.y = c(8),  # Font size for the y-axis label
+    font.tickslab = c(10),  # Font size for the axis tick labels
+    legend.title = "Expression Level",
+    legend.labs = c("High", "Low"),
+    legend = "right",
+    risk.table = FALSE,
+    ncensor.plot = FALSE,
+    ggtheme = theme_minimal(),
+    palette = c("#E7B800", "#2E9FDF"),  # Custom colors for High and Low
+    size = 1,
+    alpha = 0.8,
+    break.time.by = 5,
+    surv.median.line = "hv"  # Add horizontal and vertical lines at median survival
+  )
+  
+  # Create the contingency table plot
+  table_plot <- tableGrob(contingency_df, rows = NULL, theme = ttheme_minimal(base_size = 10))
+  
+  # Combine the survival plot and contingency table vertically
+  combined_plot <- arrangeGrob(
+    p$plot, 
+    table_plot, 
+    ncol = 1, 
+    heights = c(3, 1)  # Adjust heights as needed
+  )
+  
+  # Add the combined plot to the list
+  plot_list[[site]] <- combined_plot
+}
+
+# Arrange all combined plots in a grid layout and save as a single-page PDF
+if (length(plot_list) > 0) {
+  # Determine the number of columns based on the number of plots
+  num_cols <- 2
+  num_rows <- ceiling(length(plot_list) / num_cols)
+  
+  # Arrange the plots
+  grid_arranged <- marrangeGrob(
+    grobs = plot_list, 
+    nrow = num_rows, 
+    ncol = num_cols, 
+    top = "PFS Survival Curves with Contingency Tables"
+  )
+  
+  # Print the arranged plots to the PDF
+  print(grid_arranged)
+}
+
+# Close the PDF device
+#dev.off()
+
+```

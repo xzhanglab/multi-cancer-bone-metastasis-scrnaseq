@@ -1,0 +1,246 @@
+---
+title: "07.Pseudobulk_processing for DESeq2"
+output: html_document
+date: "2023-09-07"
+---
+
+```{r, read in data}
+rm(list = setdiff(ls(), "df"))
+library(tidyverse)
+library(dplyr)
+library(cowplot)
+library(edgeR)
+library(Matrix)
+library(reshape2)
+library(S4Vectors)
+library(SingleCellExperiment)
+library(pheatmap)
+library(apeglm)
+library(png)
+library(DESeq2)
+library(RColorBrewer)
+library(data.table)
+```
+
+```{r}
+#read i
+# Extract raw counts and metadata to create SingleCellExperiment object
+counts <- df@assays$RNA@counts 
+metadata <- df@meta.data
+# Set up metadata as desired for aggregation and DE analysis convert to factors
+df@active.ident <- factor(df$celltype_C)
+metadata$cell.id <- factor(df@active.ident)
+metadata$group.id <- factor(df$archetype)
+metadata$sample.id <- factor(df$cancer.id)
+# Create single cell experiment object
+sce <- SingleCellExperiment(assays = list(counts = counts), 
+                            colData = metadata)
+#################################################################################################################################################
+#Preparing the single-cell dataset for pseudobulk analysis
+##Extracting necessary metrics for aggregation by cell type in a sample
+
+# Extract unique names of clusters (= levels of cluster_id factor variable)
+cluster_names <- levels(colData(sce)$cell.id)
+# Extract unique names of samples (= levels of sample_id factor variable)
+sample_names <- levels(colData(sce)$sample.id)
+#################################################################################################################################################
+##Aggregating counts to the sample level for each cluster
+# Identify groups for aggregation of counts
+groups <- colData(sce)[, c("cell.id","sample.id")]
+
+# Aggregate across cluster-sample groups
+# transposing row/columns to have cell_ids as row names matching those of groups
+aggr_counts <- aggregate.Matrix(t(counts(sce)), 
+                                groupings = groups, fun = "sum") 
+
+#################################################################################################################################################
+##Splitting the counts matrix by cell type
+# Transpose aggregated matrix to have genes as rows and samples as columns
+aggr_counts <- t(aggr_counts)
+
+# Understanding tstrsplit()
+
+## Exploring structure of function output (list)
+tstrsplit(colnames(aggr_counts), "_") %>% str()
+
+## Comparing the first 10 elements of our input and output strings
+head(colnames(aggr_counts), n = 10)
+head(tstrsplit(colnames(aggr_counts), "_")[[1]], n = 10)
+
+# Loop over all cell types to extract corresponding counts, and store information in a list
+## Initiate empty list
+counts_ls <- list()
+
+for (i in 1:length(cluster_names)) {
+
+  ## Extract indexes of columns in the global matrix that match a given cluster
+  column_idx <- which(tstrsplit(colnames(aggr_counts), "_")[[1]] == cluster_names[i])
+  
+  ## Store corresponding sub-matrix as one element of a list
+  counts_ls[[i]] <- aggr_counts[, column_idx]
+  names(counts_ls)[i] <- cluster_names[i]
+
+}
+# Explore the different components of the list
+str(counts_ls)
+#################################################################################################################################################
+#Generating matching metadata at the sample-level
+# Reminder: explore structure of metadata
+head(colData(sce))
+
+# Extract sample-level variables
+metadata <- colData(sce) %>% 
+  as.data.frame() %>% 
+  dplyr::select(group.id,sample.id)
+
+dim(metadata)
+head(metadata)
+
+# Exclude duplicated rows
+metadata <- metadata[!duplicated(metadata), ]
+
+dim(metadata)
+head(metadata)
+
+# Rename rows
+rownames(metadata) <- metadata$sample.id
+head(metadata)
+
+# Number of cells per sample and cluster
+t <- table(colData(sce)$sample.id,
+           colData(sce)$cell.id)
+#################################################################################################################################################
+# Creating metadata list
+## Initiate empty list
+metadata_ls <- list()
+
+for (i in 1:length(counts_ls)) {
+  
+    ## Initiate a data frame for cluster i with one row per sample (matching column names in the counts matrix)
+    df <- data.frame(cell_sample.id = colnames(counts_ls[[i]]))
+    
+    ## Use tstrsplit() to separate cluster (cell type) and sample IDs
+    df$cell.id <- tstrsplit(df$cell_sample.id, "_")[[1]]
+    df$sample.id <- tstrsplit(df$cell_sample.id, "_")[[2]]
+    
+    
+    ## Retrieve cell count information for this cluster from global cell count table
+    idx <- which(colnames(t) == unique(df$cell.id))
+    cell_counts <- t[, idx]
+    
+    ## Remove samples with zero cell contributing to the cluster
+    cell_counts <- cell_counts[cell_counts > 0]
+    
+    ## Match order of cell_counts and sample_ids
+    sample_order <- match(df$sample.id, names(cell_counts))
+    cell_counts <- cell_counts[sample_order]
+    
+    ## Append cell_counts to data frame
+    df$cell_count <- cell_counts
+    
+    
+    ## Join data frame (capturing metadata specific to cluster) to generic metadata
+    df <- plyr::join(df, metadata, 
+                     by = intersect(names(df), names(metadata)))
+    
+    ## Update rownames of metadata to match colnames of count matrix, as needed later for DE
+    rownames(df) <- df$cell_sample.id
+    
+    ## Store complete metadata for cluster i in list
+    metadata_ls[[i]] <- df
+    names(metadata_ls)[i] <- unique(df$cell.id)
+
+}
+# Explore the different components of the list
+str(metadata_ls)
+```
+
+
+
+#Creating a DESeq2 object
+```{r}
+# Select cell type of interest
+cluster_names
+
+# Double-check that both lists have same names
+all(names(counts_ls) == names(metadata_ls))
+
+idx <- which(names(counts_ls) == "OC")##any cell type
+cluster_counts <- counts_ls[[idx]]
+cluster_metadata <- metadata_ls[[idx]]
+
+# Check contents of extracted objects
+#cluster_counts[1:6, 1:9]
+head(cluster_metadata)
+
+# Check matching of matrix columns and metadata rows
+all(colnames(cluster_counts) == rownames(cluster_metadata))
+
+# Create DESeq2 object     
+DESeq <- DESeqDataSetFromMatrix(cluster_counts, 
+                                colData = cluster_metadata, 
+                                design = ~ group.id)
+#counts <- DESeq@assays@data
+#saveRDS(counts, './outs/pseudobulk/counts.rds')
+#write.csv(DESeq@assays@data, './outs/pseudobulk/counts.csv')
+#saveRDS(DESeq, "./outs/pseudobulk/DESeq.rds")
+#saveRDS(cluster_metadata, './outs/pseudobulk/counts_metadata.rds')
+```
+
+
+```{r, export the pseudubulk matrix}
+# Identify the numeric patient IDs
+numeric_patient_ids <- grep("^\\d+$", df1$patient.id, value = TRUE)
+
+# Add the prefix "MDACC" to these numeric patient IDs
+df1$patient.id <- ifelse(df1$patient.id %in% numeric_patient_ids,
+                        paste0("MDACC_", df1$patient.id),
+                        df1$patient.id)
+
+# Check the modified patient IDs
+unique(df1$patient.id)
+
+
+library(SingleCellExperiment)
+library(tidyverse)
+library(dplyr)
+library(cowplot)
+library(edgeR)
+library(Matrix)
+library(reshape2)
+library(S4Vectors)
+library(SingleCellExperiment)
+library(pheatmap)
+library(apeglm)
+library(png)
+library(DESeq2)
+library(RColorBrewer)
+library(data.table)
+# Step 1: Extract raw counts and metadata from the Seurat object
+counts <- df@assays$RNA@counts 
+metadata <- df@meta.data
+
+# Step 2: Ensure sample.id is correctly formatted as a factor
+metadata$sample.id <- factor(df$cancer.id)
+
+# Step 3: Create a SingleCellExperiment object (optional, but useful for metadata)
+sce <- SingleCellExperiment(assays = list(counts = counts), colData = metadata)
+
+# Step 4: Aggregate counts by sample (ignoring cell types)
+# Group by sample.id
+groups <- colData(sce)[, "sample.id"]
+
+# Aggregate counts matrix by sample.id, summing counts for each gene across cells for each sample
+aggr_counts <- aggregate.Matrix(t(counts(sce)), groupings = groups, fun = "sum")
+
+# Step 5: Transpose the matrix to have genes as rows and samples as columns
+aggr_counts <- t(aggr_counts)
+
+# Step 6: Save the aggregated counts matrix as a CSV file
+write.csv(aggr_counts, "./outs/all.aggregated_gene_counts_by_sample.csv", row.names = TRUE)
+
+# Optional: Check the resulting aggregated matrix
+head(aggr_counts)
+
+```
+

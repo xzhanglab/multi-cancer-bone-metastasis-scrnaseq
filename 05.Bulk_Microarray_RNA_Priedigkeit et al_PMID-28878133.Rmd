@@ -1,0 +1,921 @@
+---
+title: "additional data analysis"
+output: html_document
+date: "2024-09-16"
+---
+
+```{r}
+# Load necessary libraries
+rm(list=ls())
+library(GSVA)
+library(GSEABase)
+library(pheatmap)
+```
+
+```{r}
+# Step 1: Load expression data
+# The expression matrix should have genes as rows and patients as columns
+# Replace 'path/to/expression_matrix.txt' with your actual file path
+load("/Volumes/Fengshuo_14T/Lab/Yunfeng/cancer_comparsions/Zenodo/data/Bulk_Microarray_Data(published)/PMID-28878133.RData")
+marker <- readRDS("./data/Bulk_Microarray_Data(published)/cell_type_markers_from_scRNA_data_for_estimation.rds")
+expression_matrix <- adrain.clps
+
+# Step 2: Use your marker data
+# Assuming 'marker' is your data frame with cell type markers
+# If 'marker' is not already in your R environment, read it from a file
+# marker <- read.table("path/to/marker_data.txt", header=TRUE, sep="\t", stringsAsFactors=FALSE)
+
+# Create a list of gene sets (one per cell type)
+cell_type_markers <- split(marker$gene, marker$cluster)
+cell_type_markers <- lapply(cell_type_markers, function(genes) {
+  toupper(genes[1:min(20, length(genes))])  # Keep top 20 genes
+})
+
+# Step 3: Ensure gene names match between expression data and cell markers
+# Convert gene names to uppercase (or lowercase) if necessary to match
+rownames(expression_matrix) <- toupper(rownames(expression_matrix))
+cell_type_markers <- lapply(cell_type_markers, toupper)
+
+# Step 4: Run ssGSEA to calculate enrichment scores
+ssgsea_scores <- gsva(expression_matrix, cell_type_markers, method='ssgsea', ssgsea.norm=TRUE)
+
+# ssgsea_scores is a matrix with cell types as rows and patients as columns
+
+# Step 5: Generate heatmap
+# Optionally, scale the scores across cell types (rows) or patients (columns)
+# Step 7: Generate heatmap for patients of type "M"
+breaks <- seq(-1.5, 1.5, length.out = 100)
+
+# Generate heatmap
+pheatmap(ssgsea_scores,
+         scale = "row",
+         breaks = breaks,
+         clustering_distance_rows = 'correlation',
+         clustering_distance_cols = 'correlation',
+         clustering_method = 'average',
+         show_colnames = TRUE,
+         show_rownames = TRUE,
+         cluster_rows = T,
+         cluster_cols = TRUE,
+         fontsize_row = 10,
+         fontsize_col = 10)
+
+
+```
+
+```{r}
+# Step 5: Subset the expression data to include only patients where type == "M"
+# Get the sample names where type == "M"
+samples_M <- rownames(adrain.ann)[adrain.ann$type == "M"]
+
+# Ensure that these sample names are present in the expression matrix
+samples_M <- intersect(samples_M, colnames(expression_matrix))
+
+# Subset the expression matrix
+expression_matrix_M <- expression_matrix[, samples_M]
+
+# Step 6: Run ssGSEA to calculate enrichment scores using the subsetted data
+ssgsea_scores_M <- gsva(expression_matrix_M, cell_type_markers, method='ssgsea', ssgsea.norm=TRUE)
+
+# ssgsea_scores_M is a matrix with cell types as rows and patients as columns (only type "M")
+
+# Step 7: Generate heatmap for patients of type "M"
+breaks <- seq(-1.5, 1.5, length.out = 100)
+
+# Generate heatmap
+pheatmap(ssgsea_scores_M,
+         scale = "row",
+         breaks = breaks,
+         clustering_distance_rows = 'correlation',
+         clustering_distance_cols = 'correlation',
+         clustering_method = 'average',
+         show_colnames = TRUE,
+         show_rownames = TRUE,
+         cluster_rows = T,
+         cluster_cols = TRUE,
+         fontsize_row = 10,
+         fontsize_col = 10)
+
+```
+
+```{r}
+# Prepare gene names
+
+rownames(expression_matrix) <- toupper(rownames(expression_matrix))
+cell_type_markers <- split(marker$gene, marker$cluster)
+cell_type_markers <- lapply(cell_type_markers, toupper)
+cell_type_markers <- lapply(cell_type_markers, function(genes) {
+  toupper(genes[1:min(10, length(genes))])  # Keep top 20 genes
+})
+
+# Run ssGSEA to calculate enrichment scores using all cell types
+ssgsea_scores_all <- gsva(expression_matrix, cell_type_markers, method='ssgsea', ssgsea.norm=TRUE)
+
+# Filter out unwanted cell types after calculating ssGSEA scores
+cell_types_to_keep <- c("pro Mono", "CD14hi Mono", "CD16hi Mono", "OC", "Mφ", "CD4 Treg", "CD8 Tex", "exhausting CD8 T")
+rownames(ssgsea_scores_all) <- trimws(rownames(ssgsea_scores_all))
+cell_types_to_keep <- trimws(cell_types_to_keep)
+ssgsea_scores_filtered <- ssgsea_scores_all[cell_types_to_keep, , drop=FALSE]
+
+# Filter patients where patient type is "M"
+common_samples <- intersect(colnames(ssgsea_scores_filtered), rownames(adrain.ann))
+adrain.ann <- adrain.ann[common_samples, ]
+ssgsea_scores_filtered <- ssgsea_scores_filtered[, common_samples]
+samples_type_M <- rownames(adrain.ann)[adrain.ann$type == "P"]
+ssgsea_scores_filtered <- ssgsea_scores_filtered[, samples_type_M]
+
+# Scale the data after filtering
+ssgsea_scores_scaled <- t(scale(t(ssgsea_scores_filtered)))
+
+# Generate heatmap
+# Adjust the scale range to -1 to 1
+# Adjust the scale range to -1 to 1
+breaks <- seq(-1.5, 1.5, length.out = 100)
+
+# Generate heatmap
+pheatmap(ssgsea_scores_scaled,
+         breaks = breaks,
+         clustering_distance_rows = 'correlation',
+         clustering_distance_cols = 'correlation',
+         clustering_method = 'complete',
+         show_colnames = TRUE,
+         show_rownames = TRUE,
+         cluster_rows = FALSE,
+         cluster_cols = TRUE,
+         fontsize_row = 10,
+         fontsize_col = 10)
+
+
+```
+
+```{r}
+# Load necessary libraries
+library(GSVA)
+library(GSEABase)
+library(pheatmap)
+
+# Assuming 'expression_matrix' is your expression data matrix with genes as rows and samples as columns
+# Assuming 'marker' is your data frame with cell type markers
+
+# Prepare gene names and keep top 10 genes for each cell type
+rownames(expression_matrix) <- toupper(rownames(expression_matrix))
+
+# Split the marker data into cell types and only keep the top 10 genes per cell type
+cell_type_markers <- split(marker$gene, marker$cluster)
+cell_type_markers <- lapply(cell_type_markers, function(genes) {
+  toupper(genes[1:min(10, length(genes))])  # Keep top 10 genes
+})
+
+# Run ssGSEA to calculate enrichment scores using all cell types
+ssgsea_scores_all <- gsva(expression_matrix, cell_type_markers, method='ssgsea', ssgsea.norm=TRUE)
+
+# Filter out unwanted cell types after calculating ssGSEA scores
+cell_types_to_keep <- c("pro Mono", "CD14hi Mono", "CD16hi Mono", "OC", "Mφ", "CD4 Treg", "CD8 Tex","exhausting CD8 T")
+rownames(ssgsea_scores_all) <- trimws(rownames(ssgsea_scores_all))
+cell_types_to_keep <- trimws(cell_types_to_keep)
+ssgsea_scores_filtered <- ssgsea_scores_all[cell_types_to_keep, , drop=FALSE]
+
+# Scale the data after filtering
+ssgsea_scores_scaled <- t(scale(t(ssgsea_scores_filtered)))
+
+# Generate heatmap
+# Adjust the scale range to -1.5 to 1.5
+breaks <- seq(-1.5, 1.5, length.out = 100)
+
+pheatmap(ssgsea_scores_scaled,
+         breaks = breaks,
+         clustering_distance_rows = 'correlation',
+         clustering_distance_cols = 'correlation',
+         clustering_method = 'complete',
+         show_colnames = TRUE,
+         show_rownames = TRUE,
+         cluster_rows = FALSE,
+         cluster_cols = TRUE,
+         fontsize_row = 10,
+         fontsize_col = 10)
+
+
+```
+
+```{r}
+# Load necessary libraries
+library(reshape2)
+library(ggplot2)
+library(gridExtra)
+
+# Assuming your data frame is named 'ssgsea_scores_filtered'
+# Normalize the data from 0 to 1 per cell type (row-wise normalization)
+normalized_data <- t(apply(ssgsea_scores_filtered, 1, function(x) (x - min(x)) / (max(x) - min(x))))
+normalized_data <- as.data.frame(normalized_data)
+
+# Extract "P" and "M" samples
+P_samples <- normalized_data[, grep("P$", colnames(normalized_data))]
+M_samples <- normalized_data[, grep("M$", colnames(normalized_data))]
+
+# Names of the samples
+P_names <- colnames(P_samples)
+M_names <- colnames(M_samples)
+
+# Initialize a list to store the plots
+plots <- list()
+
+# Loop over each cell type to generate heatmaps
+for (cell_type in rownames(normalized_data)) {
+  # Extract data for current cell type
+  P_values <- as.numeric(P_samples[cell_type, ])
+  M_values <- as.numeric(M_samples[cell_type, ])
+  
+  # Create data frames for correlation
+  P_df <- data.frame(P_values)
+  M_df <- data.frame(M_values)
+  
+  # Assign sample names to the rows
+  rownames(P_df) <- P_names
+  rownames(M_df) <- M_names
+  
+  # Combine P and M values into one data frame
+  combined_df <- data.frame(Sample = c(P_names, M_names),
+                            Group = c(rep("P", length(P_values)), rep("M", length(M_values))),
+                            Value = c(P_values, M_values))
+  
+  # Compute the correlation matrix (since we have only one value per sample, correlation isn't meaningful here)
+  # Instead, we'll create a confusion matrix-style plot of the values
+  
+  # Create a matrix of P vs M sample values
+  value_matrix <- outer(P_values, M_values, function(x, y) (x + y) / 2)
+  rownames(value_matrix) <- P_names
+  colnames(value_matrix) <- M_names
+  
+  # Melt the matrix for ggplot2
+  value_melted <- melt(value_matrix)
+  
+  # Generate the heatmap
+  p <- ggplot(value_melted, aes(Var1, Var2, fill = value)) +
+    geom_tile(color = "white") +
+    scale_fill_gradient(low = "white", high = "red", name="Value") +
+    theme_minimal() +
+    ggtitle(cell_type) +
+    xlab("P Samples") +
+    ylab("M Samples") +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  
+  # Add the plot to the list
+  plots[[cell_type]] <- p
+}
+
+# Combine all the heatmaps into one figure
+do.call(grid.arrange, c(plots, ncol = 2))
+
+```
+
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(reshape2)
+library(gridExtra)
+
+# Assuming your data frame is named 'ssgsea_scores_filtered'
+
+# Step 1: Normalize the data from 0 to 1 per cell type (row-wise normalization)
+normalized_data <- t(apply(ssgsea_scores_filtered, 1, function(x) {
+  (x - min(x)) / (max(x) - min(x))
+}))
+normalized_data <- as.data.frame(normalized_data)
+
+# Step 2: Transpose the data so that samples are rows and cell types are columns
+normalized_data_t <- t(normalized_data)
+normalized_data_t <- as.data.frame(normalized_data_t)
+
+# Step 3: Add sample group information ("P" or "M") to each sample
+normalized_data_t$SampleName <- rownames(normalized_data_t)
+normalized_data_t$Group <- ifelse(grepl("P$", normalized_data_t$SampleName), "P", "M")
+
+# Step 4: Process each cell type
+# Since we need to plot one confusion matrix per cell type, we'll loop over each cell type
+
+# Initialize a list to store the plots
+plots <- list()
+
+cell_types <- colnames(normalized_data_t)[!colnames(normalized_data_t) %in% c("SampleName", "Group")]
+
+for (cell_type in cell_types) {
+  # Extract data for the current cell type
+  data_cell_type <- normalized_data_t[, c(cell_type, "SampleName", "Group")]
+  
+  # Extract "M" samples and perform hierarchical clustering to get sample order
+  M_samples <- data_cell_type[data_cell_type$Group == "M", ]
+  M_data <- M_samples[, cell_type, drop = FALSE]
+  rownames(M_data) <- M_samples$SampleName
+  
+  # Check if we have enough "M" samples to cluster
+  if (nrow(M_data) > 2) {
+    # Compute distance matrix and perform clustering
+    dist_M <- dist(M_data)
+    hc <- hclust(dist_M)
+    sample_order_M <- M_samples$SampleName[hc$order]
+  } else {
+    # If not enough samples, use existing order
+    sample_order_M <- M_samples$SampleName
+  }
+  
+  # Get sample IDs without the group suffix
+  sample_ids_ordered <- sub("[PM]$", "", sample_order_M)
+  
+  # Now, for all samples (both "P" and "M"), create the sample order based on sample IDs
+  sample_order <- c()
+  for (id in sample_ids_ordered) {
+    # Check for "P" sample
+    P_sample_name <- data_cell_type$SampleName[data_cell_type$SampleName == paste0(id, "P")]
+    if (length(P_sample_name) > 0) {
+      sample_order <- c(sample_order, P_sample_name)
+    }
+    # Check for "M" sample
+    M_sample_name <- data_cell_type$SampleName[data_cell_type$SampleName == paste0(id, "M")]
+    if (length(M_sample_name) > 0) {
+      sample_order <- c(sample_order, M_sample_name)
+    }
+  }
+  
+  # Reorder the data
+  data_ordered <- data_cell_type[match(sample_order, data_cell_type$SampleName), ]
+  data_vector <- data_ordered[, cell_type]
+  names(data_vector) <- data_ordered$SampleName
+  group_labels <- data_ordered$Group
+  
+  # Remove "P" and "M" suffixes from sample names for plotting
+  sample_order_no_suffix <- sub("[PM]$", "", sample_order)
+  
+  # Create a matrix to hold the differences
+  n <- length(data_vector)
+  diff_matrix <- outer(data_vector, data_vector, FUN = function(x, y) abs(x - y))
+  rownames(diff_matrix) <- colnames(diff_matrix) <- sample_order_no_suffix
+  
+  # Create a mask for the upper-left and lower-right triangles
+  mask <- matrix(NA, n, n)
+  rownames(mask) <- colnames(mask) <- sample_order_no_suffix
+  
+  for (i in 1:n) {
+    for (j in 1:n) {
+      if (group_labels[i] == "P" && group_labels[j] == "P" && i >= j) {
+        # Upper-left triangle: P vs P
+        mask[i, j] <- diff_matrix[i, j]
+      } else if (group_labels[i] == "M" && group_labels[j] == "M" && i <= j) {
+        # Lower-right triangle: M vs M
+        mask[i, j] <- diff_matrix[i, j]
+      }
+      # Else, leave as NA
+    }
+  }
+  
+  # Melt the masked matrix for plotting
+  masked_melted <- melt(mask, na.rm = TRUE)
+  
+  # Generate the heatmap
+  p <- ggplot(masked_melted, aes(x = Var2, y = Var1, fill = value)) +
+    geom_tile(color = "white") +
+    scale_fill_gradient(low = "white", high = "red", name="Abs Difference") +
+    theme_minimal() +
+    xlab("Samples") +
+    ylab("Samples") +
+    ggtitle(cell_type) +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+  
+  # Add the plot to the list
+  plots[[cell_type]] <- p
+}
+
+# Step 5: Combine all the plots into one figure
+do.call(grid.arrange, c(plots, ncol = 2))
+
+```
+
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(reshape2)
+library(gridExtra)
+library(RColorBrewer)  # For enhanced color palettes
+
+# Assuming your data frame is named 'ssgsea_scores_filtered'
+
+# Step 1: Normalize the data per cell type using Z-score normalization
+normalized_data <- t(apply(ssgsea_scores_filtered, 1, function(x) {
+  (x - mean(x)) / sd(x)
+}))
+normalized_data <- as.data.frame(normalized_data)
+
+# Step 2: Transpose the data so that samples are rows and cell types are columns
+normalized_data_t <- t(normalized_data)
+normalized_data_t <- as.data.frame(normalized_data_t)
+
+# Step 3: Add sample group information ("P" or "M") to each sample
+normalized_data_t$SampleName <- rownames(normalized_data_t)
+normalized_data_t$Group <- ifelse(grepl("P$", normalized_data_t$SampleName), "P", "M")
+
+# Step 4: Process each cell type
+# Loop over each cell type to generate heatmaps
+plots <- list()
+
+cell_types <- colnames(normalized_data_t)[!colnames(normalized_data_t) %in% c("SampleName", "Group")]
+
+for (cell_type in cell_types) {
+  # Extract data for the current cell type
+  data_cell_type <- normalized_data_t[, c(cell_type, "SampleName", "Group")]
+  
+  # Extract "M" samples and perform hierarchical clustering to get sample order
+  M_samples <- data_cell_type[data_cell_type$Group == "M", ]
+  M_data <- M_samples[, cell_type, drop = FALSE]
+  rownames(M_data) <- M_samples$SampleName
+  
+  # Check if we have enough "M" samples to cluster
+  if (nrow(M_data) > 2) {
+    # Compute distance matrix and perform clustering
+    dist_M <- dist(M_data)
+    hc <- hclust(dist_M)
+    sample_order_M <- M_samples$SampleName[hc$order]
+  } else {
+    # If not enough samples, use existing order
+    sample_order_M <- M_samples$SampleName
+  }
+  
+  # Get sample IDs without the group suffix
+  sample_ids_ordered <- sub("[PM]$", "", sample_order_M)
+  
+  # Create the sample order based on sample IDs
+  sample_order <- c()
+  for (id in sample_ids_ordered) {
+    # Add "P" and "M" samples if they exist
+    P_sample_name <- data_cell_type$SampleName[data_cell_type$SampleName == paste0(id, "P")]
+    if (length(P_sample_name) > 0) {
+      sample_order <- c(sample_order, P_sample_name)
+    }
+    M_sample_name <- data_cell_type$SampleName[data_cell_type$SampleName == paste0(id, "M")]
+    if (length(M_sample_name) > 0) {
+      sample_order <- c(sample_order, M_sample_name)
+    }
+  }
+  
+  # Reorder the data
+  data_ordered <- data_cell_type[match(sample_order, data_cell_type$SampleName), ]
+  data_vector <- data_ordered[, cell_type]
+  names(data_vector) <- data_ordered$SampleName
+  group_labels <- data_ordered$Group
+  
+  # Remove "P" and "M" suffixes from sample names for plotting
+  sample_order_no_suffix <- sub("[PM]$", "", sample_order)
+  
+  # Step 5: Create a matrix of differences (without absolute value)
+  n <- length(data_vector)
+  diff_matrix <- outer(data_vector, data_vector, FUN = function(x, y) x - y)
+  rownames(diff_matrix) <- colnames(diff_matrix) <- sample_order_no_suffix
+  
+  # Step 6: Create a mask for the upper-left and lower-right triangles
+  mask <- matrix(NA, n, n)
+  rownames(mask) <- colnames(mask) <- sample_order_no_suffix
+  
+  for (i in 1:n) {
+    for (j in 1:n) {
+      if (group_labels[i] == "P" && group_labels[j] == "P" && i >= j) {
+        # Upper-left triangle: P vs P
+        mask[i, j] <- diff_matrix[i, j]
+      } else if (group_labels[i] == "M" && group_labels[j] == "M" && i <= j) {
+        # Lower-right triangle: M vs M
+        mask[i, j] <- diff_matrix[i, j]
+      }
+      # Else, leave as NA
+    }
+  }
+  
+  # Melt the masked matrix for plotting
+  masked_melted <- melt(mask, na.rm = TRUE)
+  
+  # Step 7: Adjust the color scale limits to enhance contrast
+  max_abs_value <- max(abs(masked_melted$value))
+  
+  # Step 8: Generate the heatmap with enhanced color contrast
+  p <- ggplot(masked_melted, aes(x = Var2, y = Var1, fill = value)) +
+    geom_tile(color = "grey80") +
+    scale_fill_gradientn(colors = rev(brewer.pal(11, "PiGN")),
+                         limits = c(-max_abs_value, max_abs_value),
+                         name = "Difference (Z-score)") +
+    theme_minimal() +
+    xlab("Samples") +
+    ylab("Samples") +
+    ggtitle(cell_type) +
+    theme(axis.text.x = element_text(angle = 0, vjust = 0.5, hjust=1),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank())
+  
+  # Add the plot to the list
+  plots[[cell_type]] <- p
+}
+
+# Step 9: Combine all the plots into one figure
+do.call(grid.arrange, c(plots, ncol = 2))
+
+```
+
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(reshape2)
+library(RColorBrewer)
+library(tidyr)
+library(dplyr)
+
+# Assuming your data frame is named 'ssgsea_scores_filtered'
+
+# Step 1: Normalize the data per cell type using Z-score normalization
+normalized_data <- t(apply(ssgsea_scores_filtered, 1, function(x) {
+  (x - mean(x)) / sd(x)
+}))
+normalized_data <- as.data.frame(normalized_data)
+
+# Step 2: Transpose the data so that samples are rows and cell types are columns
+normalized_data_t <- t(normalized_data)
+normalized_data_t <- as.data.frame(normalized_data_t)
+
+# Add sample information
+normalized_data_t$SampleName <- rownames(normalized_data_t)
+normalized_data_t$Group <- ifelse(grepl("P$", normalized_data_t$SampleName), "P", "M")
+normalized_data_t$SampleID <- sub("[PM]$", "", normalized_data_t$SampleName)
+
+# Step 3: Reshape the data to long format
+data_long <- normalized_data_t %>%
+  gather(key = "CellType", value = "Value", -SampleName, -Group, -SampleID)
+
+# Step 4: Create a combined identifier for each sample-cell type
+data_long$Sample_CellType <- paste(data_long$SampleID, data_long$CellType, sep = "_")
+
+# Step 5: Prepare data for computing pairwise differences
+comb_data <- data_long %>%
+  select(Sample_CellType, Value) %>%
+  distinct()
+
+# Step 6: Create a vector of values with names
+value_vector <- comb_data$Value
+names(value_vector) <- comb_data$Sample_CellType
+
+# Step 7: Compute the pairwise differences
+diff_matrix <- outer(value_vector, value_vector, FUN = function(x, y) x - y)
+
+# Step 8: Assign row and column names
+labels <- comb_data$Sample_CellType
+rownames(diff_matrix) <- labels
+colnames(diff_matrix) <- labels
+
+# Step 9: Cluster the matrix to enhance visualization
+# Compute distance matrix
+dist_matrix <- dist(value_vector)
+# Perform hierarchical clustering
+hc <- hclust(dist_matrix)
+# Reorder the matrix
+ordered_labels <- labels[hc$order]
+diff_matrix_ordered <- diff_matrix[ordered_labels, ordered_labels]
+
+# Step 10: Melt the ordered matrix for plotting
+diff_melted <- melt(diff_matrix_ordered, varnames = c("Var1", "Var2"), value.name = "Difference")
+
+# Step 11: Adjust the color scale limits
+max_abs_value <- max(abs(diff_melted$Difference))
+
+# Step 12: Generate the heatmap
+p <- ggplot(diff_melted, aes(x = Var2, y = Var1, fill = Difference)) +
+  geom_tile(color = "grey80") +
+  scale_fill_gradientn(colors = rev(brewer.pal(11, "RdBu")),
+                       limits = c(-max_abs_value, max_abs_value),
+                       name = "Difference (Z-score)") +
+  theme_minimal() +
+  xlab("Sample and Cell Type") +
+  ylab("Sample and Cell Type") +
+  ggtitle("Combined Confusion Matrix") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1, size = 5),
+        axis.text.y = element_text(size = 5),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank())
+
+# Print the plot
+print(p)
+
+```
+
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(reshape2)
+library(gridExtra)
+library(RColorBrewer)  # For enhanced color palettes
+library(pheatmap)      # For advanced heatmap plotting
+
+# Assuming your data frame is named 'ssgsea_scores_filtered'
+ssgsea_scores_filtered <- ssgsea_scores
+# Step 1: Normalize the data per cell type using Z-score normalization
+normalized_data <- t(apply(ssgsea_scores_filtered, 1, function(x) {
+  (x - mean(x)) / sd(x)
+}))
+normalized_data <- as.data.frame(normalized_data)
+
+# Step 2: Transpose the data so that samples are rows and cell types are columns
+normalized_data_t <- t(normalized_data)
+normalized_data_t <- as.data.frame(normalized_data_t)
+
+# Step 3: Add sample group information ("P" or "M") to each sample
+normalized_data_t$SampleName <- rownames(normalized_data_t)
+normalized_data_t$Group <- ifelse(grepl("P$", normalized_data_t$SampleName), "P", "M")
+
+# Step 4: Split the data into "M" and "P" groups
+data_P <- normalized_data_t[normalized_data_t$Group == "P", ]
+data_M <- normalized_data_t[normalized_data_t$Group == "M", ]
+
+# Remove 'SampleName' and 'Group' columns to retain only cell type data
+cell_types <- colnames(normalized_data_t)[!colnames(normalized_data_t) %in% c("SampleName", "Group")]
+data_P_values <- data_P[, cell_types]
+data_M_values <- data_M[, cell_types]
+
+# Step 5: Compute correlation matrices for each group
+# Transpose the data to have cell types as rows and patients as columns
+data_P_values_t <- t(data_P_values)
+data_M_values_t <- t(data_M_values)
+
+# Compute correlation matrices (cell types vs. cell types across patients)
+cor_matrix_P <- cor(data_P_values_t, use = "pairwise.complete.obs")
+cor_matrix_M <- cor(data_M_values_t, use = "pairwise.complete.obs")
+
+# Step 6: Visualize the correlation matrices using heatmaps
+# Use the same color scale for both heatmaps for comparison
+
+# Define color palette
+my_palette <- colorRampPalette(rev(brewer.pal(11, "RdBu")))(100)
+
+# Create heatmaps
+pheatmap_P <- pheatmap(cor_matrix_P,
+                       color = my_palette,
+                       breaks = seq(-0.5, 0.5, length.out = 100),
+                       cluster_rows = TRUE,
+                       cluster_cols = TRUE,
+                       main = "Cell Type Correlation in P Group",
+                       fontsize = 10)
+
+pheatmap_M <- pheatmap(cor_matrix_M,
+                       color = my_palette,
+                       breaks = seq(-0.5, 0.5, length.out = 100),
+                       cluster_rows = TRUE,
+                       cluster_cols = TRUE,
+                       main = "Cell Type Correlation in M Group",
+                       fontsize = 10)
+
+# Optional Step: Compute the difference between the two correlation matrices
+cor_matrix_diff <- cor_matrix_M - cor_matrix_P
+
+# Visualize the difference matrix
+pheatmap_diff <- pheatmap(cor_matrix_diff,
+                          color = my_palette,
+                          breaks = seq(-0.5, 0.5, length.out = 100),
+                          cluster_rows = TRUE,
+                          cluster_cols = TRUE,
+                          main = "Difference in Correlations (M - P)",
+                          fontsize = 10)
+
+# Since pheatmap outputs are grid objects, we can arrange them using grid.arrange
+# Extract the grobs
+gP <- pheatmap_P$gtable
+gM <- pheatmap_M$gtable
+gDiff <- pheatmap_diff$gtable
+
+# Arrange the heatmaps side by side
+grid.arrange(gP, gM, gDiff, ncol = 3)
+
+```
+
+
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(reshape2)
+library(gridExtra)
+library(RColorBrewer)  # For color palettes
+library(pheatmap)      # For heatmap plotting
+
+# Assuming your data frame is named 'ssgsea_scores_filtered'
+# If you have 'ssgsea_scores', assign it to 'ssgsea_scores_filtered'
+# ssgsea_scores_filtered <- ssgsea_scores
+
+# Step 1: Transpose the data to have samples as rows and cell types as columns
+data_transposed <- as.data.frame(t(ssgsea_scores_filtered))
+
+# Add SampleName and Group columns
+data_transposed$SampleName <- rownames(data_transposed)
+data_transposed$Group <- ifelse(grepl("P$", data_transposed$SampleName), "P", "M")
+
+# Remove "M" and "P" suffix to get base SampleID
+data_transposed$SampleID <- sub("[PM]$", "", data_transposed$SampleName)
+
+# Identify the cell type columns (exclude 'SampleName', 'Group', 'SampleID')
+cell_types <- setdiff(colnames(data_transposed), c("SampleName", "Group", "SampleID"))
+
+# Step 2: Normalize the data for each sample (row-wise Z-score normalization)
+# Note: Since we are comparing samples, it's better to normalize across cell types (columns)
+normalized_data <- as.data.frame(scale(data_transposed[, cell_types]))
+
+# Add back SampleID and Group information
+normalized_data$SampleID <- data_transposed$SampleID
+normalized_data$Group <- data_transposed$Group
+
+# Step 3: Split the data into "M" and "P" groups
+data_M <- normalized_data[normalized_data$Group == "M", ]
+data_P <- normalized_data[normalized_data$Group == "P", ]
+
+# Step 4: Set SampleID as row names to align samples between groups
+rownames(data_M) <- data_M$SampleID
+rownames(data_P) <- data_P$SampleID
+
+# Remove non-numeric columns for correlation computation
+data_M_values <- data_M[, cell_types]
+data_P_values <- data_P[, cell_types]
+
+# Step 5: Compute correlation matrices between samples for each group
+# Since samples are rows and cell types are columns, we compute correlations between samples
+cor_matrix_M <- cor(t(data_M_values), use = "pairwise.complete.obs")
+cor_matrix_P <- cor(t(data_P_values), use = "pairwise.complete.obs")
+
+# Step 6: Obtain sample order from the "M" group correlation matrix
+# Perform hierarchical clustering on the "M" group's correlation matrix
+hc_M <- hclust(as.dist(1 - cor_matrix_M))
+
+# Get the sample order from the clustering
+sample_order <- hc_M$labels[hc_M$order]
+
+# Reorder the correlation matrices according to the sample order
+cor_matrix_M <- cor_matrix_M[sample_order, sample_order]
+cor_matrix_P <- cor_matrix_P[sample_order, sample_order]
+
+# Step 7: Plot the correlation matrices using the same sample order
+# Define a consistent color palette
+my_palette <- colorRampPalette(rev(brewer.pal(11, "RdBu")))(100)
+
+# Create heatmaps without clustering (since we already ordered the samples)
+pheatmap_M <- pheatmap(cor_matrix_M,
+                       color = my_palette,
+                       breaks = seq(-1, 1, length.out = 100),
+                       cluster_rows = FALSE,
+                       cluster_cols = FALSE,
+                       main = "Bone Metastasis TME",
+                       fontsize = 10)
+
+pheatmap_P <- pheatmap(cor_matrix_P,
+                       color = my_palette,
+                       breaks = seq(-1, 1, length.out = 100),
+                       cluster_rows = FALSE,
+                       cluster_cols = FALSE,
+                       main = "Primary Tumor TME",
+                       fontsize = 10)
+
+# Optional Step: Compute the difference between the two correlation matrices
+cor_matrix_diff <- cor_matrix_M - cor_matrix_P
+
+# Visualize the difference matrix
+pheatmap_diff <- pheatmap(cor_matrix_diff,
+                          color = my_palette,
+                          breaks = seq(-1, 1, length.out = 100),
+                          cluster_rows = FALSE,
+                          cluster_cols = FALSE,
+                          main = "Difference in Correlations (M - P)",
+                          fontsize = 10)
+
+# Arrange the heatmaps side by side
+gM <- pheatmap_M$gtable
+gP <- pheatmap_P$gtable
+gDiff <- pheatmap_diff$gtable
+
+grid.arrange(gM, gP, gDiff, ncol = 3)
+
+
+# Open a PDF device to save the plots
+pdf("~/Desktop/correlation_heatmaps.pdf", width = 8, height = 2)  # Adjust width and height as needed
+
+# Arrange and draw the plots into the PDF
+grid.arrange(gM, gP, gDiff, ncol = 3)
+
+# Close the PDF device
+dev.off()
+```
+
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(reshape2)
+library(gridExtra)
+library(RColorBrewer)  # For color palettes
+library(pheatmap)      # For heatmap plotting
+
+# Assuming your data frame is named 'ssgsea_scores_filtered'
+# If you have 'ssgsea_scores', assign it to 'ssgsea_scores_filtered'
+# ssgsea_scores_filtered <- ssgsea_scores
+
+# Step 1: Transpose the data to have samples as rows and cell types as columns
+data_transposed <- as.data.frame(t(ssgsea_scores_filtered))
+
+# Add SampleName and Group columns
+data_transposed$SampleName <- rownames(data_transposed)
+data_transposed$Group <- ifelse(grepl("P$", data_transposed$SampleName), "P", "M")
+
+# Remove "M" and "P" suffix to get base SampleID
+data_transposed$SampleID <- sub("[PM]$", "", data_transposed$SampleName)
+
+# Identify the cell type columns (exclude 'SampleName', 'Group', 'SampleID')
+cell_types <- setdiff(colnames(data_transposed), c("SampleName", "Group", "SampleID"))
+
+# Step 2: Normalize the data for each sample (row-wise Z-score normalization)
+# Note: Since we are comparing samples, it's better to normalize across cell types (columns)
+normalized_data <- as.data.frame(scale(data_transposed[, cell_types]))
+
+# Add back SampleID and Group information
+normalized_data$SampleID <- data_transposed$SampleID
+normalized_data$Group <- data_transposed$Group
+
+# Step 3: Split the data into "M" and "P" groups
+data_M <- normalized_data[normalized_data$Group == "M", ]
+data_P <- normalized_data[normalized_data$Group == "P", ]
+
+# Step 4: Set SampleID as row names to align samples between groups
+rownames(data_M) <- data_M$SampleID
+rownames(data_P) <- data_P$SampleID
+
+# Remove non-numeric columns for correlation computation
+data_M_values <- data_M[, cell_types]
+data_P_values <- data_P[, cell_types]
+
+# Step 5: Compute correlation matrices between samples for each group using Spearman correlation
+# Since samples are rows and cell types are columns, we compute correlations between samples
+cor_matrix_M <- cor(t(data_M_values), method = "spearman", use = "pairwise.complete.obs")
+cor_matrix_P <- cor(t(data_P_values), method = "spearman", use = "pairwise.complete.obs")
+
+# Step 6: Obtain sample order from the "M" group correlation matrix
+# Perform hierarchical clustering on the "M" group's correlation matrix
+hc_M <- hclust(as.dist(1 - cor_matrix_M))
+
+# Get the sample order from the clustering
+sample_order <- hc_M$labels[hc_M$order]
+
+# Reorder the correlation matrices according to the sample order
+cor_matrix_M <- cor_matrix_M[sample_order, sample_order]
+cor_matrix_P <- cor_matrix_P[sample_order, sample_order]
+
+# Step 7: Plot the correlation matrices using the same sample order
+# Define a consistent color palette
+my_palette <- colorRampPalette(rev(brewer.pal(11, "RdBu")))(100)
+
+# Create heatmaps without clustering (since we already ordered the samples)
+pheatmap_M <- pheatmap(
+  cor_matrix_M,
+  color = my_palette,
+  breaks = seq(-1, 1, length.out = 100),
+  cluster_rows = FALSE,
+  cluster_cols = FALSE,
+  border_color = NA,  # Remove grid lines if desired
+  main = "Bone Metastasis TME (Spearman)",
+  fontsize = 10
+)
+
+pheatmap_P <- pheatmap(
+  cor_matrix_P,
+  color = my_palette,
+  breaks = seq(-1, 1, length.out = 100),
+  cluster_rows = FALSE,
+  cluster_cols = FALSE,
+  border_color = NA,  # Remove grid lines if desired
+  main = "Primary Tumor TME (Spearman)",
+  fontsize = 10
+)
+
+# Optional Step: Compute the difference between the two correlation matrices
+cor_matrix_diff <- cor_matrix_M - cor_matrix_P
+
+# Visualize the difference matrix
+pheatmap_diff <- pheatmap(
+  cor_matrix_diff,
+  color = my_palette,
+  breaks = seq(-1, 1, length.out = 100),
+  cluster_rows = FALSE,
+  cluster_cols = FALSE,
+  border_color = NA,  # Remove grid lines if desired
+  main = "Difference in Correlations (M - P, Spearman)",
+  fontsize = 10
+)
+
+# Arrange the heatmaps side by side
+gM <- pheatmap_M$gtable
+gP <- pheatmap_P$gtable
+gDiff <- pheatmap_diff$gtable
+
+# Open a PDF device to save the plots
+#pdf("~/Desktop/correlation_heatmaps_spearman.pdf", width = 8, height = 2)  # Adjust width and height as needed
+
+# Arrange and draw the plots into the PDF
+grid.arrange(gM, gP, gDiff, ncol = 3)
+
+# Close the PDF device
+#dev.off()
+
+```
+
