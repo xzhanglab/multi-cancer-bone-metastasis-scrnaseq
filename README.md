@@ -20,10 +20,12 @@ All intermediate data produced by running this code, as described below, are ava
 <span style="font-size: 12px;">
 These instructions will guide you through the following:
 1. Processing individual Cell Ranger outputs to generate individual Seurat objects.  
+<br>
 2. Integrating datasets, applying batch correction, and reproducing analysis from the manuscript.  
+<br>
 3. Reproducing the results from analyzing integrated bulk/microarray datasets.  
 </span>
----
+
 
 | **File Name**                                    | **Description**                                                                 | **Related Figure**             |
 |--------------------------------------------------|---------------------------------------------------------------------------------|--------------------------------|
