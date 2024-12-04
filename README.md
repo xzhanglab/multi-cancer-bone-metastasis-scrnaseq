@@ -1,7 +1,7 @@
 # <span style="font-size: 16px;">Single cell profiling of bone metastasis ecosystems from multiple cancer types reveals convergent and divergent mechanisms of bone colonization</span>
 
 <span style="font-size: 12px;">
-This repository provides instructions and code to reproduce the major results, numerics, and figures from the [manuscript](https://doi.org/10.1101/2024.05.07.593027):
+This repository provides instructions and code to reproduce the major results, numerics, and figures from the [**manuscript**](https://doi.org/10.1101/2024.05.07.593027):
 </span>
 
 ### <span style="font-size: 14px;">Citation</span>
@@ -10,7 +10,7 @@ Liu, F., Ding, Y., Xu, Z., Hao, X., Pan, T., Miles, G., Wu, Y.-H., Liu, J., Bado
 </span>
 
 <span style="font-size: 12px;">
-All intermediate data produced by running this code, as described below, are [archived on Zenodo](https://zenodo.org/uploads/14270977).  
+All intermediate data produced by running this code, as described below, are [**archived on Zenodo**](https://zenodo.org/uploads/14270977).  
 </span>
 
 ### <span style="font-size: 14px;">Overview</span>
