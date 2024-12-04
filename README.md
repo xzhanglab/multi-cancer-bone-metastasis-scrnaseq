@@ -3,11 +3,9 @@
 This repository provides instructions and code to reproduce the major results, numerics, and figures from the [manuscript](https://doi.org/10.1101/2024.05.07.593027):
 
 ### Citation
-**Title**: Single cell profiling of bone metastasis ecosystems from multiple cancer types reveals convergent and divergent mechanisms of bone colonization  
-**Authors**: Fengshuo Liu, Yunfeng Ding, Zhan Xu, Xiaoxin Hao, Tianhong Pan, George Miles, Yi-Hsuan Wu, Jun Liu, Igor L. Bado, Weijie Zhang, Ling Wu, Yang Gao, Liqun Yu, David G. Edwards, Hilda L. Chan, Sergio Aguirre, Michael Warren Dieffenbach, Elina Chen, Yichao Shen, Dane Hoffman, Luis Becerra Dominguez, Charlotte Helena Rivas, Xiang Chen, Hai Wang, Zbigniew Gugala, Robert L. Satcher, Xiang H.-F. Zhang  
-**DOI**: [10.1101/2024.05.07.593027](https://doi.org/10.1101/2024.05.07.593027)  
+Liu, F., Ding, Y., Xu, Z., Hao, X., Pan, T., Miles, G., Wu, Y.-H., Liu, J., Bado, I. L., Zhang, W., Wu, L., Gao, Y., Yu, L., Edwards, D. G., Chan, H. L., Aguirre, S., Dieffenbach, M. W., Chen, E., Shen, Y., Hoffman, D., Dominguez, L. B., Rivas, C. H., Chen, X., Wang, H., Gugala, Z., Satcher, R. L., & Zhang, X. H.-F. (2024). Single-cell profiling of bone metastasis ecosystems from multiple cancer types reveals convergent and divergent mechanisms of bone colonization. bioRxiv. https://doi.org/10.1101/2024.05.07.593027
 
-All intermediate data produced by running this code, as described below, are [archived on Zenodo](https://zenodo.org/).  
+All intermediate data produced by running this code, as described below, are [archived on Zenodo](https://zenodo.org/uploads/14270977).  
 
 ### Overview
 These instructions will guide you through the following:
