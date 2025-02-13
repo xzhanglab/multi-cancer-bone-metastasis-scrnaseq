@@ -74,5 +74,7 @@ These instructions will guide you through the following:
 
 ### <span style="font-size: 14px;">Prepared by Fengshuo Liu</span>
 
-Here is our interactive ClustrMaps widget showcasing site visits:
-[**View Map**](https://xzhanglab.github.io/multi-cancer-bone-metastasis-scrnaseq/)
+# My Project
+
+Check out the live globe widget (https://xzhanglab.github.io/multi-cancer-bone-metastasis-scrnaseq/)
+
