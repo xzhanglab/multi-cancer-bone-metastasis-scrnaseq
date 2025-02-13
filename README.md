@@ -73,3 +73,5 @@ These instructions will guide you through the following:
 ---
 
 ### <span style="font-size: 14px;">Prepared by Fengshuo Liu</span>
+## 🌍 Visit Our Globe Widget
+👉 [View Interactive Globe](https://yourusername.github.io/your-repository/globe.html)
