@@ -73,4 +73,3 @@ These instructions will guide you through the following:
 ---
 
 ### <span style="font-size: 14px;">Prepared by Fengshuo Liu</span>
-<script type="text/javascript" id="clstr_globe" src="//clustrmaps.com/globe.js?d=bZ4VdxPemliH65pDyJtxA2vM1bs6QW1fJlmfhtiFv3c"></script>
