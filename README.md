@@ -74,4 +74,6 @@ These instructions will guide you through the following:
 
 ### <span style="font-size: 14px;">Prepared by Fengshuo Liu</span>
 ## 🌍 Visit Our Globe Widget
-👉 [View Visitor Globe](visitors.html)
+👉 
+![Visitor Map](https://clustrmaps.com/map.png?d=bZ4VdxPemliH65pDyJtxA2vM1bs6QW1fJlmfhtiFv3c)
+
