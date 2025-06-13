@@ -4,13 +4,6 @@
 This repository provides instructions and code to reproduce the major results, numerics, and figures from the <a href="https://doi.org/10.1016/j.xgen.2025.100888"><b>paper</b></a>:
 </span>
 
-### <span style="font-size: 14px;">Citation</span>
-<span style="font-size: 12px;">
-Liu, F., Ding, Y., Xu, Z., Hao, X., Pan, T., Miles, G., Wu, Y.-H., Liu, J., Bado, I. L., Zhang, W., Wu, L., Gao, Y., Yu, L., Edwards, D. G., Chan, H. L., Aguirre, S., Dieffenbach, M. W., Chen, E., Shen, Y., Hoffman, D., Dominguez, L. B., Rivas, C. H., Chen, X., Wang, H., Gugala, Z., Satcher, R. L., & Zhang, X. H.-F. (2024). Single-cell profiling of bone metastasis ecosystems from multiple cancer types reveals convergent and divergent mechanisms of bone colonization. Cell Genomics https://doi.org/10.1016/j.xgen.2025.100888 
-</span>
-
-<br>
-
 ### <span style="font-size: 14px;">Data</span>
 <span style="font-size: 12px;">
 All intermediate data produced by running this code, as described below, are available for download on <a href="https://zenodo.org/uploads/14270977"><b>Zenodo</b></a>.
