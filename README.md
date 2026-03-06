@@ -11,7 +11,7 @@ This repository provides code and instructions to reproduce the major results, n
 
 All intermediate data produced by running this code are available on Zenodo:
 
-[Zenodo download](https://zenodo.org/uploads/14270977)
+[Zenodo download](10.5281/zenodo.14270976)
 
 ## Overview
 
