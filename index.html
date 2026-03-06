@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bone Metastasis scRNA-seq Resource</title>
+  <meta
+    name="description"
+    content="Single cell profiling of bone metastasis ecosystems from multiple cancer types reveals convergent and divergent mechanisms of bone colonization."
+  />
+
+  <!-- Google Analytics -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-V74PKQQ8RX"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-V74PKQQ8RX');
+  </script>
+
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --card: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --border: #e5e7eb;
+      --accent: #2563eb;
+      --accent-hover: #1d4ed8;
+      --table-head: #f0f3f7;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    .container {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 32px 20px 56px;
+    }
+
+    .card {
+      background: var(--card);
+      border-radius: 16px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+      padding: 32px;
+    }
+
+    h1, h2 {
+      margin-top: 0;
+      color: var(--text);
+    }
+
+    h1 {
+      font-size: 2rem;
+      line-height: 1.25;
+      margin-bottom: 12px;
+    }
+
+    h2 {
+      font-size: 1.25rem;
+      margin-bottom: 12px;
+    }
+
+    p.lead {
+      color: var(--muted);
+      font-size: 1.02rem;
+      margin-top: 0;
+      margin-bottom: 22px;
+    }
+
+    .section {
+      margin-top: 34px;
+    }
+
+    .button-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin: 20px 0 8px;
+    }
+
+    .btn {
+      display: inline-block;
+      padding: 11px 16px;
+      border-radius: 10px;
+      text-decoration: none;
+      font-weight: 700;
+      border: 1px solid var(--border);
+      background: #fff;
+      color: var(--text);
+      transition: 0.18s ease;
+    }
+
+    .btn:hover {
+      background: #f8fafc;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: white;
+      border-color: var(--accent);
+    }
+
+    .btn-primary:hover {
+      background: var(--accent-hover);
+    }
+
+    .meta {
+      color: var(--muted);
+      font-size: 0.95rem;
+      margin-top: 8px;
+    }
+
+    .overview-list {
+      margin: 0;
+      padding-left: 20px;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 760px;
+      background: white;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 12px 14px;
+      vertical-align: top;
+      border-bottom: 1px solid var(--border);
+    }
+
+    th {
+      background: var(--table-head);
+      font-size: 0.95rem;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    .footer {
+      margin-top: 36px;
+      color: var(--muted);
+      font-size: 0.94rem;
+    }
+
+    code.inline {
+      background: #f3f4f6;
+      padding: 2px 6px;
+      border-radius: 6px;
+      font-size: 0.92em;
+    }
+
+    @media (max-width: 700px) {
+      .card {
+        padding: 22px;
+      }
+
+      h1 {
+        font-size: 1.55rem;
+      }
+
+      .container {
+        padding: 18px 14px 36px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <h1>Single cell profiling of bone metastasis ecosystems from multiple cancer types reveals convergent and divergent mechanisms of bone colonization</h1>
+
+      <p class="lead">
+        This resource provides code, processed data references, and analysis workflow information
+        for reproducing the major results, numerics, and figures from the published study.
+      </p>
+
+      <div class="button-row">
+        <a
+          class="btn btn-primary"
+          href="https://doi.org/10.1016/j.xgen.2025.100888"
+          target="_blank"
+          rel="noopener noreferrer"
+          onclick="gtag('event','paper_click');"
+        >
+          View Paper
+        </a>
+
+        <a
+          class="btn"
+          href="https://zenodo.org/uploads/14270977"
+          target="_blank"
+          rel="noopener noreferrer"
+          onclick="gtag('event','zenodo_click');"
+        >
+          Download Data (Zenodo)
+        </a>
+
+        <a
+          class="btn"
+          href="https://github.com/REPO_OWNER/REPO_NAME"
+          target="_blank"
+          rel="noopener noreferrer"
+          onclick="gtag('event','repo_click');"
+        >
+          GitHub Repository
+        </a>
+      </div>
+
+      <div class="meta">
+        Google Analytics events tracked on this page include:
+        <code class="inline">paper_click</code>,
+        <code class="inline">zenodo_click</code>,
+        <code class="inline">repo_click</code>.
+      </div>
+
+      <div class="section">
+        <h2>Overview</h2>
+        <ol class="overview-list">
+          <li>Processing individual Cell Ranger outputs to generate individual Seurat objects.</li>
+          <li>Integrating datasets, applying batch correction, and reproducing analysis from the manuscript.</li>
+          <li>Reproducing results from integrated bulk and microarray datasets.</li>
+        </ol>
+      </div>
+
+      <div class="section">
+        <h2>Analysis Files</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>File Name</th>
+                <th>Description</th>
+                <th>Related Figure</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>01.batch_processing_for_individual_sample.R</td>
+                <td>Process Cell Ranger outputs and generate individual Seurat objects.</td>
+                <td>/</td>
+              </tr>
+              <tr>
+                <td>02_integration_Seurat.v4_39_samples.Rmd</td>
+                <td>Integration of the first batch (39 samples) as a Seurat v4 assay.</td>
+                <td>/</td>
+              </tr>
+              <tr>
+                <td>02_integration_Seurat.v5_47_samples.Rmd</td>
+                <td>Integration of a total of 47 samples as a Seurat v5 assay.</td>
+                <td>/</td>
+              </tr>
+              <tr>
+                <td>03.scPred.Rmd</td>
+                <td>Cell type prediction using scPred.</td>
+                <td>Fig S1A-S1C; Table S2</td>
+              </tr>
+              <tr>
+                <td>04.analysis_in_python.ipynb</td>
+                <td>Figure generation.</td>
+                <td>Fig 1B-1F; Fig S1D-S1N; Fig 6A-6D</td>
+              </tr>
+              <tr>
+                <td>05.Bulk_Microarray_RNA_Haideret al_PMID-26928463.Rmd</td>
+                <td>Analysis of bulk or microarray data from PMID:26928463.</td>
+                <td>/</td>
+              </tr>
+              <tr>
+                <td>05.Bulk_Microarray_RNA_Priedigkeit et al_PMID-28878133.Rmd</td>
+                <td>Analysis of bulk or microarray data from PMID:28878133.</td>
+                <td>Fig 3D</td>
+              </tr>
+              <tr>
+                <td>05.Bulk_Microarray_RNA_Sinn et al_PMID-31231679.Rmd</td>
+                <td>Analysis of bulk or microarray data from PMID:31231679.</td>
+                <td>Fig 3E, 3F</td>
+              </tr>
+              <tr>
+                <td>06.inferCNV.Rmd</td>
+                <td>InferCNV analysis.</td>
+                <td>Fig 5</td>
+              </tr>
+              <tr>
+                <td>07.Pseudobulk_data_processing_for_DESeq2.Rmd</td>
+                <td>Prepare DESeq2 objects for DEG and pathway analysis.</td>
+                <td>/</td>
+              </tr>
+              <tr>
+                <td>08.DESeq2_DEG_analysis.Rmd</td>
+                <td>Differential gene expression analysis.</td>
+                <td>Table S5</td>
+              </tr>
+              <tr>
+                <td>09.GSEA.Rmd</td>
+                <td>Pathway enrichment from DEGs.</td>
+                <td>Table S5</td>
+              </tr>
+              <tr>
+                <td>10.GSVA.Rmd</td>
+                <td>GSVA analysis.</td>
+                <td>Fig 6E; Table S6</td>
+              </tr>
+              <tr>
+                <td>11.Dynamo_trajectory.ipynb</td>
+                <td>Trajectory inference.</td>
+                <td>Fig 4; Fig S4; Table S4</td>
+              </tr>
+              <tr>
+                <td>12.CellChat.Rmd</td>
+                <td>Cell-cell communication analysis.</td>
+                <td>Fig 7A</td>
+              </tr>
+              <tr>
+                <td>12.signaling pathway integrated_Figure_S5A.ipynb</td>
+                <td>Process cell-cell communication-derived data.</td>
+                <td>Fig S5A; Table S3</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Data Files from Zenodo</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Directory or File</th>
+                <th>Description</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Bulk_Microarray_Data(published)</td>
+                <td>Published bulk RNA-seq or microarray data, and integrated data.</td>
+              </tr>
+              <tr>
+                <td>cell_count_from_IF_staining</td>
+                <td>Cell counts from IF staining for OC, Treg, and Tex cells.</td>
+              </tr>
+              <tr>
+                <td>dynamo</td>
+                <td>Scanpy objects for major cell types, and loom files integrated or subset by archetypes.</td>
+              </tr>
+              <tr>
+                <td>integrated_Seurat_objects</td>
+                <td>Integrated, batch-corrected, annotated Seurat and Scanpy objects subset by major metadata.</td>
+              </tr>
+              <tr>
+                <td>scPred_data</td>
+                <td>Prediction probability data and training dataset quality metrics.</td>
+              </tr>
+              <tr>
+                <td>DESeq2_obj_archetype_comparsion</td>
+                <td>DESeq2 objects for comparing dominant cell types across archetypes for GSVA analysis.</td>
+              </tr>
+              <tr>
+                <td>cellchat</td>
+                <td>CellChat objects and derived data for integrated plots.</td>
+              </tr>
+              <tr>
+                <td>infercnv_data_for_analysis</td>
+                <td>Data used for inferCNV analysis, including epithelial and reference stromal cells.</td>
+              </tr>
+              <tr>
+                <td>msigdb_v2023.2.Hs_GMTs</td>
+                <td>Pathway data from MSigDB for GSEA and GSVA analysis.</td>
+              </tr>
+              <tr>
+                <td>scPred_training_data_processed</td>
+                <td>Training dataset used for SVM-based cell type annotation.</td>
+              </tr>
+              <tr>
+                <td>Supplimentary Tables</td>
+                <td>Supplementary information and data.</td>
+              </tr>
+              <tr>
+                <td>cellranger_per_sample_outs</td>
+                <td>Cell Ranger outputs.</td>
+              </tr>
+              <tr>
+                <td>infercsv_outs</td>
+                <td>inferCNV analysis outputs.</td>
+              </tr>
+              <tr>
+                <td>per_sample_seurat_objects</td>
+                <td>Per-patient Seurat objects.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Citation</h2>
+        <p>
+          Single cell profiling of bone metastasis ecosystems from multiple cancer types reveals
+          convergent and divergent mechanisms of bone colonization.
+          <i>Cell Genomics</i> (2025).
+        </p>
+      </div>
+
+      <div class="footer">
+        Prepared by Fengshuo Liu.
+      </div>
+    </div>
+  </div>
+</body>
+</html>
