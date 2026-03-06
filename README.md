@@ -1,68 +1,64 @@
-# <span style="font-size: 16px;">Single cell profiling of bone metastasis ecosystems from multiple cancer types reveals convergent and divergent mechanisms of bone colonization</span>
+# Single cell profiling of bone metastasis ecosystems from multiple cancer types reveals convergent and divergent mechanisms of bone colonization
 
-<span style="font-size: 12px;">
-This repository provides instructions and code to reproduce the major results, numerics, and figures from the <a href="https://doi.org/10.1016/j.xgen.2025.100888"><b>paper</b></a>:
-</span>
+Project website:  
+[https://REPO_OWNER.github.io/REPO_NAME/](https://REPO_OWNER.github.io/REPO_NAME/)
 
-### <span style="font-size: 14px;">Data</span>
-<span style="font-size: 12px;">
-All intermediate data produced by running this code, as described below, are available for download on <a href="https://zenodo.org/uploads/14270977"><b>Zenodo</b></a>.
-</span>
+This repository provides code and instructions to reproduce the major results, numerics, and figures from the published paper:
 
-### <span style="font-size: 14px;">Overview</span>
-<span style="font-size: 12px;">
-These instructions will guide you through the following:
-<br>
-1. Processing individual Cell Ranger outputs to generate individual Seurat objects.  
-<br>
-2. Integrating datasets, applying batch correction, and reproducing analysis from the manuscript.  
-<br>
-3. Reproducing the results from analyzing integrated bulk/microarray datasets.  
-<br>
-</span>
+[Paper link](https://doi.org/10.1016/j.xgen.2025.100888)
 
-<br>
+## Data
 
-| **File Name**                                    | **Description**                                                                 | **Related Figure**             |
-|--------------------------------------------------|---------------------------------------------------------------------------------|--------------------------------|
-| <span style="font-size: 12px;">01.batch_processing_for_individual_sample.R</span>      | <span style="font-size: 12px;">Process Cell Ranger outputs and generate individual Seurat objects</span>              | /                              |
-| <span style="font-size: 12px;">02_integration_Seurat.v4_39_samples.Rmd</span>          | <span style="font-size: 12px;">Integration of the first batch (39 samples) as Seurat v4 assay</span>                  | /                              |
-| <span style="font-size: 12px;">02_integration_Seurat.v5_47_samples.Rmd</span>          | <span style="font-size: 12px;">Integration of a total of 47 samples as Seurat v5 assay</span>                         | /                              |
-| <span style="font-size: 12px;">03.scPred.Rmd</span>                                    | <span style="font-size: 12px;">Cell type prediction using scPred</span>                                              | Fig S1A-S1C; Table S2          |
-| <span style="font-size: 12px;">04.analysis_in_python.ipynb</span>                      | <span style="font-size: 12px;">Figure generation</span>                                                              | Fig 1B-1F; Fig S1D-S1N; Fig 6A-6D |
-| <span style="font-size: 12px;">05.Bulk_Microarray_RNA_Haideret al_PMID-26928463.Rmd</span> | <span style="font-size: 12px;">Analysis of bulk/microarray data from PMID:26928463</span>                             | /                              |
-| <span style="font-size: 12px;">05.Bulk_Microarray_RNA_Priedigkeit et al_PMID-28878133.Rmd</span> | <span style="font-size: 12px;">Analysis of bulk/microarray data from PMID:28878133</span>                             | Fig 3D                         |
-| <span style="font-size: 12px;">05.Bulk_Microarray_RNA_Sinn et al_PMID-31231679.Rmd</span> | <span style="font-size: 12px;">Analysis of bulk/microarray data from PMID:31231679</span>                             | Fig 3E, 3F                    |
-| <span style="font-size: 12px;">06.inferCNV.Rmd</span>                                  | <span style="font-size: 12px;">InferCNV analysis</span>                                                              | Fig 5                          |
-| <span style="font-size: 12px;">07.Pseudobulk_data_processing_for_DESeq2.Rmd</span>     | <span style="font-size: 12px;">Prepare DESeq2 object for DEG and pathway analysis</span>                              | /                              |
-| <span style="font-size: 12px;">08.DESeq2_DEG_analysis.Rmd</span>                       | <span style="font-size: 12px;">DEG analysis</span>                                                                   | Table S5                       |
-| <span style="font-size: 12px;">09.GSEA.Rmd</span>                                      | <span style="font-size: 12px;">Pathway enrichment from DEGs</span>                                                   | Table S5                       |
-| <span style="font-size: 12px;">10.GSVA.Rmd</span>                                      | <span style="font-size: 12px;">GSVA analysis</span>                                                                  | Fig 6E; Table S6               |
-| <span style="font-size: 12px;">11.Dynamo_trajectory.ipynb</span>                       | <span style="font-size: 12px;">Trajectory inference</span>                                                           | Fig 4; Fig S4; Table S4        |
-| <span style="font-size: 12px;">12.CellChat.Rmd</span>                                  | <span style="font-size: 12px;">Cell-cell communication analysis</span>                                               | Fig 7A                         |
-| <span style="font-size: 12px;">12.signaling pathway integrated_Figure_S5A.ipynb</span> | <span style="font-size: 12px;">Process cell-cell communication-derived data</span>                                   | Fig S5A; Table S3              |
+All intermediate data produced by running this code are available on Zenodo:
 
----
+[Zenodo download](https://zenodo.org/uploads/14270977)
 
-## <span style="font-size: 14px;">Data file (from Zenodo)</span>
+## Overview
 
-| Directory/File                      | Description                                                                 |
-|-------------------------------------|-----------------------------------------------------------------------------|
-| <span style="font-size: 12px;">Bulk_Microarray_Data(published)</span>     | <span style="font-size: 12px;">Published bulk RNA-seq or microarray data; and integrated data</span>             |
-| <span style="font-size: 12px;">cell_count_from_IF_staining</span>         | <span style="font-size: 12px;">Cell count from IF staining for OC, Treg, and Tex cells</span>                    |
-| <span style="font-size: 12px;">dynamo</span>                              | <span style="font-size: 12px;">Scanpy objects for major cell types, and loom files (integrated or subset by archetypes)</span> |
-| <span style="font-size: 12px;">integrated_Seurat_objects</span>           | <span style="font-size: 12px;">Integrated, batch-corrected, annotated Seurat and Scanpy objects, subset by major metadata</span> |
-| <span style="font-size: 12px;">scPred_data</span>                         | <span style="font-size: 12px;">Data of prediction probabilities and training dataset quality</span>              |
-| <span style="font-size: 12px;">DESeq2_obj_archetype_comparsion</span>     | <span style="font-size: 12px;">DESeq2 objects used for comparing the major dominant cell type across archetypes (for GSVA analysis)</span> |
-| <span style="font-size: 12px;">cellchat</span>                            | <span style="font-size: 12px;">CellChat objects and derived data for integrated plot</span>                      |
-| <span style="font-size: 12px;">infercnv_data_for_analysis</span>          | <span style="font-size: 12px;">Data used for infercnv analysis, contains epithelium and reference stromal cells</span> |
-| <span style="font-size: 12px;">msigdb_v2023.2.Hs_GMTs</span>              | <span style="font-size: 12px;">Pathway data from MsigDB, used for GSEA and GSVA analysis</span>                  |
-| <span style="font-size: 12px;">scPred_training_data_processed</span>      | <span style="font-size: 12px;">Training dataset used for SVM-based cell type annotation</span>                   |
-| <span style="font-size: 12px;">Supplimentary Tables</span>                | <span style="font-size: 12px;">Supplementary information and data</span>                                         |
-| <span style="font-size: 12px;">cellranger_per_sample_outs</span>          | <span style="font-size: 12px;">CellRanger output</span>                                                          |
-| <span style="font-size: 12px;">infercsv_outs</span>                       | <span style="font-size: 12px;">Infercnv analysis output</span>                                                   |
-| <span style="font-size: 12px;">per_sample_seurat_objects</span>           | <span style="font-size: 12px;">Seurat object for each patient</span>                                             |
+This repository supports reproduction of the following analyses:
 
----
+1. Processing individual Cell Ranger outputs to generate individual Seurat objects.
+2. Integrating datasets, applying batch correction, and reproducing analysis from the manuscript.
+3. Reproducing results from integrated bulk and microarray datasets.
 
-### <span style="font-size: 14px;">Prepared by Fengshuo Liu</span>
+## Main analysis files
+
+| File Name | Description | Related Figure |
+|---|---|---|
+| `01.batch_processing_for_individual_sample.R` | Process Cell Ranger outputs and generate individual Seurat objects | / |
+| `02_integration_Seurat.v4_39_samples.Rmd` | Integration of the first batch (39 samples) as Seurat v4 assay | / |
+| `02_integration_Seurat.v5_47_samples.Rmd` | Integration of 47 samples as Seurat v5 assay | / |
+| `03.scPred.Rmd` | Cell type prediction using scPred | Fig S1A-S1C; Table S2 |
+| `04.analysis_in_python.ipynb` | Figure generation | Fig 1B-1F; Fig S1D-S1N; Fig 6A-6D |
+| `05.Bulk_Microarray_RNA_Haideret al_PMID-26928463.Rmd` | Analysis of PMID:26928463 bulk or microarray data | / |
+| `05.Bulk_Microarray_RNA_Priedigkeit et al_PMID-28878133.Rmd` | Analysis of PMID:28878133 bulk or microarray data | Fig 3D |
+| `05.Bulk_Microarray_RNA_Sinn et al_PMID-31231679.Rmd` | Analysis of PMID:31231679 bulk or microarray data | Fig 3E, 3F |
+| `06.inferCNV.Rmd` | InferCNV analysis | Fig 5 |
+| `07.Pseudobulk_data_processing_for_DESeq2.Rmd` | Prepare DESeq2 object for DEG and pathway analysis | / |
+| `08.DESeq2_DEG_analysis.Rmd` | DEG analysis | Table S5 |
+| `09.GSEA.Rmd` | Pathway enrichment from DEGs | Table S5 |
+| `10.GSVA.Rmd` | GSVA analysis | Fig 6E; Table S6 |
+| `11.Dynamo_trajectory.ipynb` | Trajectory inference | Fig 4; Fig S4; Table S4 |
+| `12.CellChat.Rmd` | Cell-cell communication analysis | Fig 7A |
+| `12.signaling pathway integrated_Figure_S5A.ipynb` | Process cell-cell communication-derived data | Fig S5A; Table S3 |
+
+## Data files from Zenodo
+
+| Directory or File | Description |
+|---|---|
+| `Bulk_Microarray_Data(published)` | Published bulk RNA-seq or microarray data and integrated data |
+| `cell_count_from_IF_staining` | Cell counts from IF staining for OC, Treg, and Tex cells |
+| `dynamo` | Scanpy objects for major cell types and loom files |
+| `integrated_Seurat_objects` | Integrated, batch-corrected, annotated Seurat and Scanpy objects |
+| `scPred_data` | Prediction probabilities and training dataset quality |
+| `DESeq2_obj_archetype_comparsion` | DESeq2 objects for archetype comparison used in GSVA |
+| `cellchat` | CellChat objects and derived data |
+| `infercnv_data_for_analysis` | Data used for inferCNV analysis |
+| `msigdb_v2023.2.Hs_GMTs` | MSigDB pathway data used for GSEA and GSVA |
+| `scPred_training_data_processed` | Training dataset for SVM-based cell type annotation |
+| `Supplimentary Tables` | Supplementary information and data |
+| `cellranger_per_sample_outs` | Cell Ranger outputs |
+| `infercsv_outs` | inferCNV analysis outputs |
+| `per_sample_seurat_objects` | Per-sample Seurat objects |
+
+Prepared by Fengshuo Liu
