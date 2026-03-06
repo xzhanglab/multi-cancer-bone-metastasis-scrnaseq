@@ -1,7 +1,7 @@
 # Single cell profiling of bone metastasis ecosystems from multiple cancer types reveals convergent and divergent mechanisms of bone colonization
 
 Project website:  
-[https://REPO_OWNER.github.io/REPO_NAME/](https://REPO_OWNER.github.io/REPO_NAME/)
+[https://xzhanglab.github.io/multi-cancer-bone-metastasis-scrnaseq/](https://xzhanglab.github.io/multi-cancer-bone-metastasis-scrnaseq/)
 
 This repository provides code and instructions to reproduce the major results, numerics, and figures from the published paper:
 
