@@ -16,27 +16,38 @@ All intermediate data produced by this repository are available on Zenodo:
 
 [Zenodo download](https://doi.org/10.5281/zenodo.14270976)
 
-## Media coverage
+
+## Media Coverage
 
 <table>
 <tr>
-<td width="50%" align="center" valign="top">
+
+<td width="50%" align="center">
+
 <a href="https://www.bcm.edu/news/single-cell-rna-sequencing-of-bone-metastases-reveals-distinct-immune-archetypes">
-<img src="https://www.bcm.edu/sites/default/files/2025-05/bone-metastasis-scRNA.jpg" width="95%">
+<img src="media/bcm_news.png" width="90%">
 </a>
-<br><br>
-<b>BCM News</b><br>
+
+<br>
+
+**BCM News**  
 Single-cell RNA sequencing of bone metastases reveals distinct immune archetypes
+
 </td>
 
-<td width="50%" align="center" valign="top">
+<td width="50%" align="center">
+
 <a href="https://blogs.bcm.edu/2025/06/19/from-the-labs-study-reveals-heterogeneity-of-bone-metastases-across-different-and-same-cancer-types/">
-<img src="https://blogs.bcm.edu/wp-content/uploads/2025/06/bone-metastasis-scRNA.png" width="95%">
+<img src="media/bcm_blog.png" width="90%">
 </a>
-<br><br>
-<b>From the Labs | BCM Blog</b><br>
-Study reveals heterogeneity of bone metastases across different and same cancer types
+
+<br>
+
+**From the Labs – BCM Blog**  
+Study reveals heterogeneity of bone metastases across cancers
+
 </td>
+
 </tr>
 </table>
 
